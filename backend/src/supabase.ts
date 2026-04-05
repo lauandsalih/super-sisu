@@ -5,3 +5,9 @@ export const createSupabaseClient = () => {
   const supabaseKey = process.env.SUPABASE_KEY!
   return createClient(supabaseUrl, supabaseKey)
 }
+
+export const createServiceClient = () => {
+  const supabaseUrl = process.env.SUPABASE_URL!
+  const serviceKey = process.env.SUPABASE_SERVICE_KEY!
+  return createClient(supabaseUrl, serviceKey)
+}
