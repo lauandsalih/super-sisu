@@ -23,7 +23,7 @@ const SearchPage = () => {
 
   const fetchCourses = async (searchQuery: string) => {
     setLoading(true)
-    let request = supabase.from('courses').select('*')
+    let request = supabase.from('courses').select('*').limit(20)
     if (searchQuery.trim() !== '') {
       request = request.ilike('name', '%' + searchQuery + '%')
     }
@@ -41,7 +41,7 @@ const SearchPage = () => {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-4 py-12">
         <a href="/" className="text-blue-600 text-sm mb-6 block">Back to home</a>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Search Courses</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Search Courses</h1>
         <p className="text-gray-500 mb-6">Find Aalto courses, teaching periods and program info</p>
         <input
           type="text"
@@ -53,7 +53,11 @@ const SearchPage = () => {
         {loading && <p className="text-gray-400">Loading...</p>}
         <div className="flex flex-col gap-4">
           {courses.map((course) => (
-            <div key={course.id} className="bg-white rounded-xl border border-gray-200 p-5">
+            <a
+              key={course.id}
+              href={"/course/" + course.id}
+              className="bg-white rounded-xl border border-gray-200 p-5 block hover:shadow-md transition"
+            >
               <div className="flex justify-between items-start mb-2">
                 <span className="text-sm text-blue-600">{course.code}</span>
                 <span className="text-sm text-gray-500">{course.credits} cr</span>
@@ -76,7 +80,7 @@ const SearchPage = () => {
                   </span>
                 )}
               </div>
-            </div>
+            </a>
           ))}
         </div>
         {!loading && courses.length === 0 && (
