@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "aalto-path": {
+      "supabaseUrl": "https://zofaiyhyekxkeznuhovv.supabase.co",
+      "supabaseKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvZmFpeWh5ZWt4a2V6bnVob3Z2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTQyNDI0NywiZXhwIjoyMDkxMDAwMjQ3fQ.s23A8OdszuFjRvEY9WS1fA_aea4_PGmMjzfciQlZvNo"
+    }
+  }
+}

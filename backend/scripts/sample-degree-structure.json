@@ -1,0 +1,142 @@
+[
+  {
+    "id": "cs-bachelor-2024",
+    "type": "DegreeProgramme",
+    "name": { "en": "Bachelor's Program in Computer Science" },
+    "code": "SCI-A1",
+    "targetCredits": { "min": 180, "max": 180 },
+    "rule": {
+      "type": "CompositeRule",
+      "subRuleElements": ["cs-core", "cs-math", "cs-electives", "cs-common"]
+    }
+  },
+  {
+    "id": "cs-core",
+    "type": "StudyModule",
+    "name": { "en": "Core Studies in Computer Science" },
+    "code": "CS-CORE",
+    "targetCredits": { "min": 45, "max": 45 },
+    "rule": {
+      "type": "CompositeRule",
+      "subRuleElements": ["cs-a1110", "cs-a1120", "cs-a1130", "cs-c3240", "cs-c3250"]
+    }
+  },
+  {
+    "id": "cs-math",
+    "type": "StudyModule",
+    "name": { "en": "Mathematics" },
+    "code": "MATH",
+    "targetCredits": { "min": 25, "max": 25 },
+    "rule": {
+      "type": "CompositeRule",
+      "subRuleElements": ["ms-a0100", "ms-a0201", "ms-a0301", "ms-a0501"]
+    }
+  },
+  {
+    "id": "cs-electives",
+    "type": "GroupingModule",
+    "name": { "en": "Elective Studies" },
+    "code": "ELEC",
+    "targetCredits": { "min": 25, "max": 35 },
+    "rule": { "type": "CreditsRule", "min": 25, "max": 35 }
+  },
+  {
+    "id": "cs-common",
+    "type": "StudyModule",
+    "name": { "en": "Common Studies" },
+    "code": "COMM",
+    "targetCredits": { "min": 20, "max": 20 },
+    "rule": {
+      "type": "CompositeRule",
+      "subRuleElements": [" SCI-a0000", "LC-1117"]
+    }
+  },
+  {
+    "id": "cs-a1110",
+    "type": "StudyModule",
+    "name": { "en": "Programming 1" },
+    "code": "CS-A1110",
+    "targetCredits": { "min": 5, "max": 5 },
+    "rule": { "type": "CourseUnitRule" }
+  },
+  {
+    "id": "cs-a1120",
+    "type": "StudyModule",
+    "name": { "en": "Programming 2" },
+    "code": "CS-A1120",
+    "targetCredits": { "min": 5, "max": 5 },
+    "rule": { "type": "CourseUnitRule" }
+  },
+  {
+    "id": "cs-a1130",
+    "type": "StudyModule",
+    "name": { "en": "Data Structures and Algorithms" },
+    "code": "CS-A1130",
+    "targetCredits": { "min": 5, "max": 5 },
+    "rule": { "type": "CourseUnitRule" }
+  },
+  {
+    "id": "cs-c3240",
+    "type": "StudyModule",
+    "name": { "en": "Machine Learning" },
+    "code": "CS-C3240",
+    "targetCredits": { "min": 5, "max": 5 },
+    "rule": { "type": "CourseUnitRule" }
+  },
+  {
+    "id": "cs-c3250",
+    "type": "StudyModule",
+    "name": { "en": "Database Systems" },
+    "code": "CS-C3250",
+    "targetCredits": { "min": 5, "max": 5 },
+    "rule": { "type": "CourseUnitRule" }
+  },
+  {
+    "id": "ms-a0100",
+    "type": "StudyModule",
+    "name": { "en": "Differential and Integral Calculus 1" },
+    "code": "MS-A0101",
+    "targetCredits": { "min": 5, "max": 5 },
+    "rule": { "type": "CourseUnitRule" }
+  },
+  {
+    "id": "ms-a0201",
+    "type": "StudyModule",
+    "name": { "en": "Differential and Integral Calculus 2" },
+    "code": "MS-A0201",
+    "targetCredits": { "min": 5, "max": 5 },
+    "rule": { "type": "CourseUnitRule" }
+  },
+  {
+    "id": "ms-a0301",
+    "type": "StudyModule",
+    "name": { "en": "Differential and Integral Calculus 3" },
+    "code": "MS-A0301",
+    "targetCredits": { "min": 5, "max": 5 },
+    "rule": { "type": "CourseUnitRule" }
+  },
+  {
+    "id": "ms-a0501",
+    "type": "StudyModule",
+    "name": { "en": "First Course in Probability and Statistics" },
+    "code": "MS-A0501",
+    "targetCredits": { "min": 5, "max": 5 },
+    "rule": { "type": "CourseUnitRule" }
+  },
+  {
+    "id": "SCI-a0000",
+    "type": "StudyModule",
+    "name": { "en": "Introduction to Studies" },
+    "code": "SCI-A0000",
+    "targetCredits": { "min": 2, "max": 2 },
+    "rule": { "type": "CourseUnitRule" }
+  },
+  {
+    "id": "LC-1117",
+    "type": "StudyModule",
+    "name": { "en": "Integrated Oral and Written Skills" },
+    "code": "LC-1117",
+    "targetCredits": { "min": 3, "max": 3 },
+    "rule": { "type": "CourseUnitRule" }
+  }
+]
