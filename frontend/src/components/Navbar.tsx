@@ -1,20 +1,9 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useFavorites } from '../context/FavoritesContext'
-import { supabase } from '../supabase'
-import { useState, useEffect } from 'react'
 
 export default function Navbar() {
   const location = useLocation()
   const { favorites } = useFavorites()
-  const [user, setUser] = useState<any>(null)
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user))
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      setUser(session?.user || null)
-    })
-    return () => subscription.unsubscribe()
-  }, [])
 
   const isActive = (path: string) => location.pathname === path
 
@@ -55,12 +44,6 @@ export default function Navbar() {
             {favorites.length > 0 && (
               <span className="text-sm font-medium">{favorites.length}</span>
             )}
-          </Link>
-          <Link 
-            to="/profile"
-            className="px-4 py-2 text-sm font-medium border border-black rounded hover:bg-black hover:text-white transition"
-          >
-            {user ? 'My Profile' : 'Sign In'}
           </Link>
         </div>
       </div>

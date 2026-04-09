@@ -32,7 +32,10 @@
     "update-browserslist-db": "^1.2.3"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "vercel:build": "vercel build",
+    "vercel:preview": "vercel deploy",
+    "vercel:prod": "vercel deploy --prod"
   },
   "keywords": [],
   "author": "",

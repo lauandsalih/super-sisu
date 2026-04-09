@@ -242,10 +242,6 @@ function extractCoursesFromText(text: string) {
   return courses
 }
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`)
-})
-
 app.post('/api/test-extract', async (req, res) => {
   const { text } = req.body
   const courses = extractCoursesFromText(text || 'test')

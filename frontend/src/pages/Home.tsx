@@ -1,70 +1,6 @@
-import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../supabase'
 
 const Home = () => {
-  const [user, setUser] = useState<any>(null)
-  const [uploading, setUploading] = useState(false)
-  const [status, setStatus] = useState<string | null>(null)
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user))
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      setUser(session?.user || null)
-    })
-    return () => subscription.unsubscribe()
-  }, [])
-
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || !user) return
-    
-    setUploading(true)
-    setStatus('Uploading...')
-    
-    const fileExt = file.name.split('.').pop()
-    const fileName = `${user.id}-${Date.now()}.${fileExt}`
-    
-    const { error: uploadError } = await supabase.storage
-      .from('transcripts')
-      .upload(fileName, file)
-
-    if (uploadError) {
-      console.error('Upload error:', uploadError)
-      setStatus('Upload failed. Try again.')
-      setUploading(false)
-      return
-    }
-
-    setStatus('Processing transcript...')
-
-    const publicUrl = supabase.storage.from('transcripts').getPublicUrl(fileName).data.publicUrl
-
-    try {
-      const response = await fetch('/api/extract-grades', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-        },
-        body: JSON.stringify({ transcriptUrl: publicUrl })
-      })
-
-      const result = await response.json()
-      
-      if (result.success) {
-        setStatus(`Imported ${result.gradesExtracted?.length || 0} grades to your Academic Tracker!`)
-      } else {
-        setStatus('Processing complete. Check Academic Tracker for details.')
-      }
-    } catch (err) {
-      console.error('Processing error:', err)
-      setStatus('Processing complete!')
-    }
-
-    setUploading(false)
-  }
-
   return (
     <div className="max-w-[1200px] mx-auto px-8 py-12">
       <section className="text-center py-16">
@@ -92,40 +28,6 @@ const Home = () => {
           </Link>
         </div>
       </section>
-
-      {user && (
-        <section className="mt-12">
-          <h2 className="text-2xl font-bold text-black mb-6">Import Transcript</h2>
-          <div className="bg-white border-2 border-gray-200 rounded-lg p-8 text-center">
-            <div className="mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <p className="text-gray-600 mb-4">
-              Upload your Aalto transcript PDF and we'll automatically extract your grades to Academic Tracker
-            </p>
-            <label className="inline-flex items-center px-4 py-2 bg-[#0065BD] text-white rounded-lg cursor-pointer hover:bg-[#0055a3]">
-              {uploading ? 'Processing...' : 'Click to upload PDF'}
-              <input
-                type="file"
-                accept=".pdf"
-                onChange={handleUpload}
-                className="hidden"
-                disabled={uploading}
-              />
-            </label>
-            {status && (
-              <p className={`text-sm mt-4 ${status.includes('failed') ? 'text-red-500' : 'text-green-600'}`}>
-                {status}
-              </p>
-            )}
-            <p className="text-xs text-gray-400 mt-4">
-              Your grades will be added to Academic Tracker once processed
-            </p>
-          </div>
-        </section>
-      )}
     </div>
   )
 }

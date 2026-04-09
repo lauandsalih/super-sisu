@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { apiPath } from '../apiBase'
 import { supabase } from '../supabase'
 
 type UserCourse = {
@@ -37,7 +38,7 @@ const Profile = () => {
       if (user) {
         // Use API endpoint to bypass RLS issues
         try {
-          const res = await fetch(`/api/user-courses/${user.id}`)
+          const res = await fetch(apiPath(`/api/user-courses/${user.id}`))
           const json = await res.json()
           if (json.data) setUserCourses(json.data)
         } catch (e) {
@@ -55,12 +56,6 @@ const Profile = () => {
     }
     getUser()
   }, [])
-
-  const handleSignIn = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-    })
-  }
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -123,14 +118,8 @@ const Profile = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
         <div className="text-center max-w-md">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Sign in to Super Sisu</h1>
-          <p className="text-gray-500 mb-8">Connect with your Aalto account to track your courses and grades</p>
-          <button
-            onClick={handleSignIn}
-            className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition font-medium"
-          >
-            Sign in with Aalto
-          </button>
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">Profile unavailable</h1>
+          <p className="text-gray-500">User sign in is currently disabled.</p>
         </div>
       </div>
     )
@@ -288,11 +277,12 @@ const Profile = () => {
                   const { data: { publicUrl } } = supabase.storage
                     .from('transcripts')
                     .getPublicUrl(fileName)
-                  
+
+                  setUploadingTranscript(false)
                   setTranscriptMessage('PDF uploaded! Extracting grades...')
-            setExtractingGrades(false)
-                  
-                  const response = await fetch('/api/extract-grades', {
+                  setExtractingGrades(true)
+
+                  const response = await fetch(apiPath('/api/extract-grades'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
