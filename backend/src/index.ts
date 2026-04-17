@@ -230,8 +230,6 @@ function extractCoursesFromText(text: string) {
       }
     }
     
-    console.log('Line:', lineTrimmed.substring(0, 45), '-> grade:', grade, 'date:', completionDate)
-    
     console.log('Line:', lineTrimmed.substring(0, 50), '-> grade:', grade, 'date:', completionDate)
     
     courses.push({ courseCode, grade, credits, completionDate: completionDate || undefined })
@@ -770,11 +768,14 @@ function mapDateToPeriod(dateStr: string | null): string {
     period = 5
     academicYear = year - 1
   } else {
-    // July-August = Summer
+    // July-August = Summer (academic year YYYY-YYYY+1)
     return `${year - 1}-${year} Summer`
   }
   
-  return `${academicYear}-${academicYear + 1} P${period}`
+  const romanMap: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V' }
+  const roman = romanMap[period] || period.toString()
+  // Format as academic year: "2023-2024 I"
+  return `${academicYear}-${academicYear + 1} ${roman}`
 }
 
 app.get('/api/user-progress/:userId', async (req, res) => {
