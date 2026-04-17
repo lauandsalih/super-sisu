@@ -88,7 +88,7 @@ app.post('/api/extract-grades', async (req, res) => {
             status: 'completed',
             grade: course.grade,
             period: academicPeriod
-          }, { onConflict: 'user_id,course_id' })
+          }, { onConflict: 'user_id,course_id,status' })
         
         if (upsertError) {
           console.error('Upsert error:', upsertError)
@@ -110,13 +110,15 @@ app.post('/api/extract-grades', async (req, res) => {
           if (existingCourse) {
             // Use existing course
             const academicPeriod = mapDateToPeriod(course.completionDate || null)
-            await supabase.from('user_courses').insert({
-              user_id: userId,
-              course_id: existingCourse.id,
-              status: 'completed',
-              grade: course.grade,
-              period: academicPeriod
-            })
+            await supabase
+              .from('user_courses')
+              .upsert({
+                user_id: userId,
+                course_id: existingCourse.id,
+                status: 'completed',
+                grade: course.grade,
+                period: academicPeriod
+              }, { onConflict: 'user_id,course_id,status' })
             imported++
           } else {
             // Insert new legacy course
@@ -134,13 +136,15 @@ app.post('/api/extract-grades', async (req, res) => {
             
             if (insertData && insertData.id) {
               const academicPeriod = mapDateToPeriod(course.completionDate || null)
-              await supabase.from('user_courses').insert({
-                user_id: userId,
-                course_id: insertData.id,
-                status: 'completed',
-                grade: course.grade,
-                period: academicPeriod
-              })
+              await supabase
+                .from('user_courses')
+                .upsert({
+                  user_id: userId,
+                  course_id: insertData.id,
+                  status: 'completed',
+                  grade: course.grade,
+                  period: academicPeriod
+                }, { onConflict: 'user_id,course_id,status' })
               legacy++
               imported++
             } else {
