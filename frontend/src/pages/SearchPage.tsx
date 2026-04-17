@@ -45,8 +45,25 @@ const SearchPage = () => {
   const [myCourseIds, setMyCourseIds] = useState<Set<string>>(new Set())
   const [showMyCourses, setShowMyCourses] = useState(false)
   const [addingToPlan, setAddingToPlan] = useState<string | null>(null)
-  const [selectedPlanPeriod, setSelectedPlanPeriod] = useState('2025 P1')
+  const [selectedPlanPeriods, setSelectedPlanPeriods] = useState<string[]>(['2025 P1'])
   const { toggleFavorite, isFavorite } = useFavorites()
+
+  const PLAN_PERIOD_OPTIONS = [
+    '2024 P1', '2024 P2', '2024 P3', '2024 P4', '2024 P5', '2024 Summer',
+    '2025 P1', '2025 P2', '2025 P3', '2025 P4', '2025 P5', '2025 Summer',
+    '2026 P1', '2026 P2', '2026 P3', '2026 P4', '2026 P5', '2026 Summer'
+  ]
+
+  const normalizePeriodList = (periodStr: string | null | undefined): string[] => {
+    if (!periodStr) return []
+    const unique = new Set(
+      periodStr
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean)
+    )
+    return Array.from(unique)
+  }
 
   useEffect(() => {
     fetchCourses()
@@ -348,14 +365,33 @@ const SearchPage = () => {
                         e.stopPropagation()
                         if (addingToPlan === course.id) {
                           const { data: { user } } = await supabase.auth.getUser()
-                          if (user) {
-                            await supabase.from('user_courses').insert({
-                              user_id: user.id,
-                              course_id: course.id,
-                              status: 'planned',
-                              period: selectedPlanPeriod,
-                              grade: null
-                            })
+                          if (user && selectedPlanPeriods.length > 0) {
+                            const { data: existingPlanned } = await supabase
+                              .from('user_courses')
+                              .select('id, period')
+                              .eq('user_id', user.id)
+                              .eq('course_id', course.id)
+                              .eq('status', 'planned')
+                              .maybeSingle()
+
+                            if (existingPlanned) {
+                              const merged = Array.from(new Set([
+                                ...normalizePeriodList(existingPlanned.period),
+                                ...selectedPlanPeriods
+                              ]))
+                              await supabase
+                                .from('user_courses')
+                                .update({ period: merged.join(', ') })
+                                .eq('id', existingPlanned.id)
+                            } else {
+                              await supabase.from('user_courses').insert({
+                                user_id: user.id,
+                                course_id: course.id,
+                                status: 'planned',
+                                period: selectedPlanPeriods.join(', '),
+                                grade: null
+                              })
+                            }
                           }
                           setAddingToPlan(null)
                         } else {
@@ -372,32 +408,24 @@ const SearchPage = () => {
                     </button>
                     {addingToPlan === course.id && (
                       <select
-                        value={selectedPlanPeriod}
+                        multiple
+                        value={selectedPlanPeriods}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => {
-                          setSelectedPlanPeriod(e.target.value)
+                          const values = Array.from(e.target.selectedOptions).map((opt) => opt.value)
+                          setSelectedPlanPeriods(values)
                         }}
-                        className="text-xs border rounded px-2 py-1"
+                        className="text-xs border rounded px-2 py-1 min-w-[170px] h-24"
                       >
-                        <option value="2024 P1">Fall 2024 (I)</option>
-                        <option value="2024 P2">Fall 2024 (II)</option>
-                        <option value="2024 P3">Spring 2025 (III)</option>
-                        <option value="2024 P4">Spring 2025 (IV)</option>
-                        <option value="2024 P5">Spring 2025 (V)</option>
-                        <option value="2024 Summer">Summer 2024</option>
-                        <option value="2025 P1">Fall 2025 (I)</option>
-                        <option value="2025 P2">Fall 2025 (II)</option>
-                        <option value="2025 P3">Spring 2026 (III)</option>
-                        <option value="2025 P4">Spring 2026 (IV)</option>
-                        <option value="2025 P5">Spring 2026 (V)</option>
-                        <option value="2025 Summer">Summer 2025</option>
-                        <option value="2026 P1">Fall 2026 (I)</option>
-                        <option value="2026 P2">Fall 2026 (II)</option>
-                        <option value="2026 P3">Spring 2027 (III)</option>
-                        <option value="2026 P4">Spring 2027 (IV)</option>
-                        <option value="2026 P5">Spring 2027 (V)</option>
-                        <option value="2026 Summer">Summer 2026</option>
+                        {PLAN_PERIOD_OPTIONS.map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
                       </select>
+                    )}
+                    {addingToPlan === course.id && (
+                      <span className="text-xs text-purple-700">
+                        {selectedPlanPeriods.length} selected
+                      </span>
                     )}
                   </div>
                 </a>

@@ -2,6 +2,25 @@ import { useState, useEffect } from 'react'
 import { apiPath } from '../apiBase'
 import { supabase } from '../supabase'
 
+const romanToNum: Record<string, number> = { 'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5 }
+
+const toRoman = (n: number): string => {
+  const romans = ['I', 'II', 'III', 'IV', 'V']
+  return romans[n - 1] || n.toString()
+}
+
+const formatPeriod = (period: string | null): string => {
+  if (!period) return ''
+  let result = period.trim()
+  const match = result.match(/^(\d{4})\s*-\s*([IV]+|[1-5])$/i)
+  if (match) {
+    const p = match[2].toUpperCase()
+    const pNum = romanToNum[p] || parseInt(match[2])
+    result = match[1] + ' ' + toRoman(pNum)
+  }
+  return result
+}
+
 type UserCourse = {
   id: string
   course_id: string
@@ -56,6 +75,15 @@ const Profile = () => {
     }
     getUser()
   }, [])
+
+  const handleSignIn = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/profile`,
+      },
+    })
+  }
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -118,8 +146,14 @@ const Profile = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
         <div className="text-center max-w-md">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Profile unavailable</h1>
-          <p className="text-gray-500">User sign in is currently disabled.</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">Sign in to Super Sisu</h1>
+          <p className="text-gray-500 mb-8">Connect with Google to track your courses and grades</p>
+          <button
+            onClick={handleSignIn}
+            className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition font-medium"
+          >
+            Sign in with Google
+          </button>
         </div>
       </div>
     )
@@ -287,7 +321,8 @@ const Profile = () => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                       pdfUrl: publicUrl,
-                      userId: user.id 
+                      userId: user.id,
+                      fileName: fileName
                     })
                   })
                   
@@ -317,7 +352,7 @@ const Profile = () => {
             <label htmlFor="transcript-upload" className="cursor-pointer">
               <div className="text-4xl mb-2">📄</div>
               <div className="text-blue-600 hover:underline">
-                {uploadingTranscript ? 'Uploading...' : 'Click to upload PDF transcript'}
+                {uploadingTranscript ? 'Uploading...' : 'Click to upload PDF transcript (in English)'}
               </div>
             </label>
           </div>
@@ -444,7 +479,7 @@ const Profile = () => {
                       </span>
                     </div>
                     <div className="font-medium text-gray-900">{uc.courses?.name}</div>
-                    <div className="text-sm text-gray-500">{uc.courses?.credits} credits{uc.period && ` • ${uc.period}`}</div>
+                    <div className="text-sm text-gray-500">{uc.courses?.credits} credits{formatPeriod(uc.period) && ` • ${formatPeriod(uc.period)}`}</div>
                   </div>
                   {uc.grade !== null && (
                     <div className="text-2xl font-bold text-green-600">{uc.grade}</div>
