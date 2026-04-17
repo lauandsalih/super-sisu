@@ -321,8 +321,7 @@ const Profile = () => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                       pdfUrl: publicUrl,
-                      userId: user.id,
-                      fileName: fileName
+                      userId: user.id 
                     })
                   })
                   

@@ -25,8 +25,8 @@ app.get('/', async (req, res) => {
 
 app.post('/api/extract-grades', async (req, res) => {
   try {
-    const { pdfUrl, userId, fileName } = req.body
-    console.log('Extract grades request:', { pdfUrl, userId, fileName })
+    const { pdfUrl, userId } = req.body
+    console.log('Extract grades request:', { pdfUrl, userId })
     
     if (!pdfUrl || !userId) {
       return res.status(400).json({ error: 'Missing pdfUrl or userId' })
@@ -156,16 +156,6 @@ app.post('/api/extract-grades', async (req, res) => {
     }
     
     console.log('Final response:', { imported, legacy, total: courses.length, gradesExtracted: courses.map(c => ({ code: c.courseCode, grade: c.grade, date: c.completionDate })) })
-    
-    if (fileName) {
-      try {
-        await supabase.storage.from('transcripts').remove([fileName])
-        console.log('Deleted transcript file:', fileName)
-      } catch (deleteError) {
-        console.error('Failed to delete transcript file:', deleteError)
-      }
-    }
-    
     res.json({ success: true, imported, legacy, total: courses.length, failedCourses: failed, gradesExtracted: courses.map(c => ({ code: c.courseCode, grade: c.grade, date: c.completionDate })) })
   } catch (error) {
     console.error('Extract grades error:', error)
