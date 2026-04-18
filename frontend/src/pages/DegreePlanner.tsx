@@ -697,18 +697,13 @@ const DegreePlanner = () => {
                   
                   const semesterSet = new Set<string>()
                   gradedCourses.forEach((uc: any) => {
-                    const period = uc.period
-                    if (!period) return
-                    const match = period.match(/(\d{4})\s*P([1-5])/i)
-                    if (match) {
-                      const year = match[1]
-                      const p = parseInt(match[2])
-                      const semester = p <= 2 ? `${year}-fall` : `${year}-spring`
-                      semesterSet.add(semester)
+                    const p = parsePeriod(uc.period)
+                    if (p && p.year) {
+                      semesterSet.add(`${p.year}-${p.period}`)
                     }
                   })
                   const semesters = semesterSet.size
-                  const academicIndex = gradedCredits > 0 && semesters > 0 ? (gradedCredits * gpa) / semesters : 0
+                  const academicIndex = gradedCredits > 0 && semesters > 0 ? (gpa * gradedCredits) / semesters : 0
                   return academicIndex.toFixed(2)
                 })()}
               </div>
