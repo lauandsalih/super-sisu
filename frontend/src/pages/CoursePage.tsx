@@ -201,51 +201,50 @@ const CoursePage = () => {
           </div>
 
           {course.learning_outcomes && (
-            <div className="mt-6">
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">Learning outcomes</h3>
-              <p className="text-gray-600 text-sm whitespace-pre-line">{course.learning_outcomes}</p>
+            <div className="mt-6 bg-blue-50 rounded-lg p-4">
+              <h3 className="text-base font-semibold text-gray-800 mb-2">Learning outcomes</h3>
+              <p className="text-gray-700 text-sm whitespace-pre-line leading-relaxed">{course.learning_outcomes}</p>
             </div>
           )}
 
           {course.content && (
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">Content</h3>
-              <p className="text-gray-600 text-sm whitespace-pre-line">{course.content}</p>
+            <div className="mt-4 bg-green-50 rounded-lg p-4">
+              <h3 className="text-base font-semibold text-gray-800 mb-2">Content</h3>
+              <p className="text-gray-700 text-sm whitespace-pre-line leading-relaxed">{course.content}</p>
             </div>
           )}
 
           {course.description && (
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">Description</h3>
-              <p className="text-gray-600 text-sm">{course.description}</p>
+            <div className="mt-4 bg-gray-50 rounded-lg p-4">
+              <h3 className="text-base font-semibold text-gray-800 mb-2">Description</h3>
+              <p className="text-gray-700 text-sm leading-relaxed">{course.description}</p>
             </div>
           )}
 
-          {course.teacher && (
-            <p className="text-gray-500 text-sm mt-4">Teacher: {course.teacher}</p>
-          )}
-
           {course.prerequisites && (
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <h3 className="text-sm font-semibold text-gray-700 mb-1">Prerequisites</h3>
+            <div className="mt-4 bg-orange-50 rounded-lg p-4">
+              <h3 className="text-base font-semibold text-gray-800 mb-2">Prerequisites</h3>
               <p 
-                className="text-gray-600 text-sm"
+                className="text-gray-700 text-sm"
                 dangerouslySetInnerHTML={{ __html: renderPrerequisites(course.prerequisites) || '' }}
               />
             </div>
           )}
 
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Additional information</h3>
-            <div className="text-sm text-gray-600 space-y-1">
+          <div className="mt-4 bg-purple-50 rounded-lg p-4">
+            <h3 className="text-base font-semibold text-gray-800 mb-2">Additional information</h3>
+            <div className="text-sm text-gray-700 space-y-1">
               {course.teaching_language && (
-                <p><span className="font-medium">Teaching Language:</span> {course.teaching_language}</p>
+                <p><span className="font-semibold">Teaching Language:</span> {course.teaching_language}</p>
               )}
               {course.teaching_period && (
-                <p><span className="font-medium">Teaching Period:</span> {course.teaching_period}</p>
+                <p><span className="font-semibold">Teaching Period:</span> {course.teaching_period}</p>
               )}
               {course.period && (
-                <p><span className="font-medium">Teaching Period:</span> {course.period}</p>
+                <p><span className="font-semibold">Teaching Period:</span> {course.period}</p>
+              )}
+              {course.teacher && (
+                <p><span className="font-semibold">Teacher:</span> {course.teacher}</p>
               )}
             </div>
           </div>

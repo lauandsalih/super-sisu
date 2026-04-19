@@ -86,7 +86,7 @@ const DegreePlanner = () => {
             .from('users')
             .select('graduation_date')
             .eq('id', user.id)
-            .single()
+            .maybeSingle()
         ])
 
         if (coursesData.data) {
@@ -100,6 +100,8 @@ const DegreePlanner = () => {
         
         if (userData.data?.graduation_date) {
           setGoalDate(userData.data.graduation_date)
+        } else if (userData.data) {
+          setGoalDate(userData.data.graduation_date || '')
         }
       }
       setLoading(false)
@@ -839,7 +841,12 @@ const DegreePlanner = () => {
                 onClick={async () => {
                   const { data: { user } } = await supabase.auth.getUser()
                   if (user && goalDate) {
-                    await supabase.from('users').upsert({ id: user.id, graduation_date: goalDate }, { onConflict: 'id' })
+                    const { error } = await supabase.from('users').upsert({ id: user.id, graduation_date: goalDate }, { onConflict: 'id' })
+                    if (!error) {
+                      alert('Graduation date saved!')
+                    }
+                  } else {
+                    alert('Please select a date first')
                   }
                 }}
                 className="text-xs bg-[#0065BD] text-white px-2 py-1 rounded hover:bg-[#0055a3]"
