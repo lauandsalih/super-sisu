@@ -529,17 +529,29 @@ const DegreePlanner = () => {
     }
     
     // Calculate extension values
+    // Find the last actual credits value before planned starts
+    let lastActualCreditsValue = 0
+    for (let i = 0; i < firstPlannedIdx; i++) {
+      if (combinedData[i].actualCredits != null) {
+        lastActualCreditsValue = combinedData[i].actualCredits
+      }
+    }
+    
     for (let i = 0; i < combinedData.length; i++) {
       if (i < firstPlannedIdx) {
         // Before first planned: no extension line
         combinedData[i].actualExtension = null as any
       } else if (i === firstPlannedIdx) {
-        // First planned period: start at actualCredits's value
-        combinedData[i].actualExtension = combinedData[i].actualCredits
+        // First planned period: start from last actual credits value
+        combinedData[i].actualExtension = lastActualCreditsValue
       } else if (i <= lastPlannedIdx) {
-        // Between first and last planned: add cumulatively
-        const prevExtension = combinedData[i - 1].actualExtension || combinedData[i - 1].actualCredits
-        combinedData[i].actualExtension = prevExtension + (combinedData[i].plannedOnlyCredits || 0)
+        // Between first and last planned: add cumulatively from the start value
+        const startExtension = combinedData[firstPlannedIdx].actualExtension || lastActualCreditsValue
+        let totalPlannedCredits = 0
+        for (let j = firstPlannedIdx; j <= i; j++) {
+          totalPlannedCredits += combinedData[j].plannedOnlyCredits || 0
+        }
+        combinedData[i].actualExtension = startExtension + totalPlannedCredits
       } else {
         // After last planned: stop the line (null)
         combinedData[i].actualExtension = null as any

@@ -91,15 +91,6 @@ const Profile = () => {
     getUser()
   }, [])
 
-  const handleSignIn = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/profile`,
-      },
-    })
-  }
-
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     setUser(null)
@@ -161,14 +152,14 @@ const Profile = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
         <div className="text-center max-w-md">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Sign in to Super Sisu</h1>
-          <p className="text-gray-500 mb-8">Connect with Google to track your courses and grades</p>
-          <button
-            onClick={handleSignIn}
-            className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition font-medium"
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">Sign in Required</h1>
+          <p className="text-gray-500 mb-8">Please sign in from the home page to view your profile</p>
+          <a
+            href="/"
+            className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition font-medium inline-block"
           >
-            Sign in with Google
-          </button>
+            Go to Home
+          </a>
         </div>
       </div>
     )

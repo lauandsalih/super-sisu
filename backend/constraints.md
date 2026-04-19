@@ -96,4 +96,15 @@ All new features, requirements, and decisions must be documented in constraints.
 Users can manually add courses to their profile (My Courses) via a modal with search, period, grade, and status selection.
 
 18. Timeline Period Editing
-Clicking on a planned course in the timeline opens a modal to edit its periods. 
+Clicking on a planned course in the timeline opens a modal to edit its periods.
+
+19. Landing Page Auth
+Add authentication section between subtitle and action cards:
+- "Continue with Google" button (existing OAuth)
+- Magic Link section with email input and "Send Magic Link" button
+- Use Supabase signInWithMagicLink() for magic link login
+- Show existing cards but visually secondary until authenticated
+
+20. Credit Progress Line Styling
+- Credit line should stop at the last completed period (no nulls beyond)
+- Planned line should start from the endpoint of credit line and extend through planned periods 
