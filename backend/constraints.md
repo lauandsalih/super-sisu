@@ -90,4 +90,10 @@ Course page should display information in SISU-like format:
 - Additional information (Teaching Language, Teaching Period)
 
 16. Constraints Documentation
-All new features, requirements, and decisions must be documented in constraints.md. Do not make significant changes without recording them there first. 
+All new features, requirements, and decisions must be documented in constraints.md. Do not make significant changes without recording them there first.
+
+17. Profile Course Add
+Users can manually add courses to their profile (My Courses) via a modal with search, period, grade, and status selection.
+
+18. Timeline Period Editing
+Clicking on a planned course in the timeline opens a modal to edit its periods. 

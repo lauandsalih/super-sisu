@@ -48,6 +48,14 @@ const Profile = () => {
   const [selectedCourses, setSelectedCourses] = useState<Set<string>>(new Set())
   const [degreeType, setDegreeType] = useState<'bachelor' | 'master'>('bachelor')
   const [showDegreeDetails, setShowDegreeDetails] = useState(false)
+  const [showAddCourseModal, setShowAddCourseModal] = useState(false)
+  const [addCourseSearch, setAddCourseSearch] = useState('')
+  const [addCourseResults, setAddCourseResults] = useState<any[]>([])
+  const [addCourseSelected, setAddCourseSelected] = useState<any>(null)
+  const [addCourseGrade, setAddCourseGrade] = useState<string>('')
+  const [addCoursePeriod, setAddCoursePeriod] = useState<string>('')
+  const [addCourseStatus, setAddCourseStatus] = useState<string>('completed')
+  const [courseList, setCourseList] = useState<any[]>([])
 
   useEffect(() => {
     const getUser = async () => {
@@ -61,6 +69,14 @@ const Profile = () => {
           .eq('user_id', user.id)
         if (data) setUserCourses(data)
       }
+      
+      // Fetch available courses
+      const { data: coursesData } = await supabase
+        .from('courses')
+        .select('id, code, name, credits')
+        .order('code')
+        .limit(500)
+      if (coursesData) setCourseList(coursesData)
       
       setLoading(false)
     }
@@ -371,6 +387,12 @@ const Profile = () => {
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-gray-900">My Courses</h2>
+            <button
+              onClick={() => setShowAddCourseModal(true)}
+              className="text-sm px-3 py-1 rounded bg-[#0065BD] text-white hover:bg-[#0055a3]"
+            >
+              + Add Course
+            </button>
             <div className="flex gap-2">
               {userCourses.length > 0 && (
                 <>
@@ -487,6 +509,123 @@ const Profile = () => {
           )}
         </div>
       </div>
+
+      {/* Add Course Modal */}
+      {showAddCourseModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[80vh] overflow-auto">
+            <h3 className="text-lg font-semibold mb-4">Add Course to My Courses</h3>
+            
+            <input
+              type="text"
+              placeholder="Search course by code or name..."
+              value={addCourseSearch}
+              onChange={(e) => {
+                setAddCourseSearch(e.target.value)
+                if (e.target.value.length >= 2) {
+                  const results = courseList.filter(c => 
+                    c.code.toLowerCase().includes(e.target.value.toLowerCase()) ||
+                    c.name.toLowerCase().includes(e.target.value.toLowerCase())
+                  ).slice(0, 10)
+                  setAddCourseResults(results)
+                } else {
+                  setAddCourseResults([])
+                }
+              }}
+              className="w-full border rounded px-3 py-2 mb-3"
+            />
+            
+            {addCourseResults.length > 0 && (
+              <div className="max-h-40 overflow-auto mb-4 border rounded">
+                {addCourseResults.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => {
+                      setAddCourseSelected(c)
+                      setAddCourseSearch(c.code + ' - ' + c.name)
+                      setAddCourseResults([])
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b text-sm"
+                  >
+                    <span className="font-mono text-blue-600">{c.code}</span>
+                    <span className="ml-2 text-gray-600">{c.name}</span>
+                    <span className="ml-2 text-gray-400">({c.credits} cr)</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            {addCourseSelected && (
+              <div className="space-y-3 mb-4">
+                <div className="flex gap-2">
+                  <select
+                    value={addCourseStatus}
+                    onChange={(e) => setAddCourseStatus(e.target.value)}
+                    className="border rounded px-3 py-2 text-sm"
+                  >
+                    <option value="completed">Completed</option>
+                    <option value="current">Current</option>
+                    <option value="planned">Planned</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Period (e.g., 2024-2025 I)"
+                    value={addCoursePeriod}
+                    onChange={(e) => setAddCoursePeriod(e.target.value)}
+                    className="border rounded px-3 py-2 text-sm flex-1"
+                  />
+                </div>
+                <select
+                  value={addCourseGrade}
+                  onChange={(e) => setAddCourseGrade(e.target.value)}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                >
+                  <option value="">Grade (optional)</option>
+                  <option value="5">5</option>
+                  <option value="4">4</option>
+                  <option value="3">3</option>
+                  <option value="2">2</option>
+                  <option value="1">1</option>
+                </select>
+              </div>
+            )}
+            
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => {
+                  setShowAddCourseModal(false)
+                  setAddCourseSelected(null)
+                  setAddCourseSearch('')
+                }}
+                className="px-4 py-2 text-sm border rounded hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!user || !addCourseSelected) return
+                  const { error } = await supabase.from('user_courses').insert({
+                    user_id: user.id,
+                    course_id: addCourseSelected.id,
+                    status: addCourseStatus,
+                    period: addCoursePeriod || null,
+                    grade: addCourseGrade ? parseInt(addCourseGrade) : null
+                  })
+                  if (!error) {
+                    setShowAddCourseModal(false)
+                    setAddCourseSelected(null)
+                    window.location.reload()
+                  }
+                }}
+                disabled={!addCourseSelected}
+                className="px-4 py-2 text-sm bg-[#0065BD] text-white rounded hover:bg-[#0055a3] disabled:opacity-50"
+              >
+                Add Course
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
