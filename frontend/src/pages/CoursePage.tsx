@@ -168,7 +168,10 @@ const CoursePage = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
-        <Link to="/" className="text-blue-600 text-sm hover:underline">← Back to home</Link>
+        <div className="flex justify-between items-center mb-4">
+          <Link to="/search" className="text-blue-600 text-sm hover:underline">← Back to Search</Link>
+          <Link to="/" className="text-blue-600 text-sm hover:underline">Home</Link>
+        </div>
         
         <div className="mt-4 bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex justify-between items-start">
