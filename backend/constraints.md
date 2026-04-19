@@ -79,4 +79,15 @@ Broad SELECT policies on storage.objects must NOT be created or maintained. Each
 Pages must be ordered: Academic Tracker → My Profile → Search Courses (left to right)
 
 14. Expandable Course Cards (Search Page)
-When clicking a course card in Search Courses, the card must expand inline to show all course details and features (info, statistics, plan buttons) instead of navigating to a separate page. This keeps users in context and eliminates unnecessary page navigation. 
+When clicking a course card in Search Courses, the card must expand inline to show all course details and features (info, statistics, plan buttons) instead of navigating to a separate page. This keeps users in context and eliminates unnecessary page navigation.
+
+15. Course URL Format
+Course URLs must use course code (e.g., /course/CS-A1100) instead of UUID for cleaner, more readable URLs.
+
+16. Course Page Format
+Course page should display information in SISU-like format:
+- Learning outcomes
+- Content
+- Description
+- Prerequisites
+- Additional information (Teaching Language, Teaching Period) 

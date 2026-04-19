@@ -832,16 +832,20 @@ const DegreePlanner = () => {
               <input
                 type="date"
                 value={goalDate}
-                onChange={async (e) => {
-                  const newDate = e.target.value
-                  setGoalDate(newDate)
-                  const { data: { user } } = await supabase.auth.getUser()
-                  if (user) {
-                    await supabase.from('users').upsert({ id: user.id, graduation_date: newDate }, { onConflict: 'id' })
-                  }
-                }}
+                onChange={(e) => setGoalDate(e.target.value)}
                 className="text-sm border rounded px-2 py-1"
               />
+              <button
+                onClick={async () => {
+                  const { data: { user } } = await supabase.auth.getUser()
+                  if (user && goalDate) {
+                    await supabase.from('users').upsert({ id: user.id, graduation_date: goalDate }, { onConflict: 'id' })
+                  }
+                }}
+                className="text-xs bg-[#0065BD] text-white px-2 py-1 rounded hover:bg-[#0055a3]"
+              >
+                Apply
+              </button>
             </div>
           </div>
         </div>

@@ -4,5 +4,9 @@
   "outputDirectory": "frontend/dist",
   "installCommand": "cd frontend && npm ci",
   "framework": null,
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "vercelIgnore": ["backend/"]
 }

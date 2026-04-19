@@ -14,6 +14,10 @@ type Course = {
   teacher: string | null
   prerequisites: string | null
   description: string | null
+  learning_outcomes: string | null
+  content: string | null
+  teaching_language: string | null
+  teaching_period: string | null
 }
 
 type Review = {
@@ -26,7 +30,7 @@ type Review = {
 }
 
 const CoursePage = () => {
-  const { id } = useParams()
+  const { code } = useParams()
   const [course, setCourse] = useState<Course | null>(null)
   const [reviews, setReviews] = useState<Review[]>([])
   const [exams, setExams] = useState<any[]>([])
@@ -47,43 +51,45 @@ const CoursePage = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data } = await supabase
+      const { data: courseData } = await supabase
         .from('courses')
         .select('*')
-        .eq('id', id)
+        .eq('code', code)
         .single()
       
-      if (data) {
-        setCourse(data)
+      if (courseData) {
+        setCourse(courseData)
       } else {
         setError(true)
       }
 
-      const { data: reviewsData } = await supabase
-        .from('reviews')
-        .select('*')
-        .eq('course_id', id)
-        .order('created_at', { ascending: false })
-      
-      setReviews(reviewsData || [])
+      if (courseData) {
+        const { data: reviewsData } = await supabase
+          .from('reviews')
+          .select('*')
+          .eq('course_id', courseData.id)
+          .order('created_at', { ascending: false })
+        
+        setReviews(reviewsData || [])
 
-      const { data: examsData } = await supabase
-        .from('exams')
-        .select('*')
-        .eq('course_id', id)
-        .order('year', { ascending: false })
-      
-      setExams(examsData || [])
+        const { data: examsData } = await supabase
+          .from('exams')
+          .select('*')
+          .eq('course_id', courseData.id)
+          .order('year', { ascending: false })
+        
+        setExams(examsData || [])
 
-      const currentUser = (await supabase.auth.getUser()).data.user
-      if (currentUser) {
-        const { data: uc } = await supabase
-          .from('user_courses')
-          .select('*, courses(*)')
-          .eq('user_id', currentUser.id)
-          .eq('course_id', id)
-          .maybeSingle()
-        setUserCourse(uc)
+        const currentUser = (await supabase.auth.getUser()).data.user
+        if (currentUser) {
+          const { data: uc } = await supabase
+            .from('user_courses')
+            .select('*, courses(*)')
+            .eq('user_id', currentUser.id)
+            .eq('course_id', courseData.id)
+            .maybeSingle()
+          setUserCourse(uc)
+        }
       }
 
       setLoading(false)
@@ -91,12 +97,14 @@ const CoursePage = () => {
     fetchData()
 
     supabase.auth.getUser().then(({ data }) => setUser(data.user))
-  }, [id])
+  }, [code])
+
+  const courseId = course?.id
 
   const submitReview = async () => {
-    if (!user) return
+    if (!user || !courseId) return
     await supabase.from('reviews').insert({
-      course_id: id,
+      course_id: courseId,
       user_id: user.id,
       workload: reviewWorkload,
       difficulty: reviewDifficulty,
@@ -107,7 +115,7 @@ const CoursePage = () => {
     const { data } = await supabase
       .from('reviews')
       .select('*')
-      .eq('course_id', id)
+      .eq('course_id', courseId)
       .order('created_at', { ascending: false })
     
     setReviews(data || [])
@@ -129,19 +137,19 @@ const CoursePage = () => {
       .from('user_courses')
       .select('*, courses(*)')
       .eq('user_id', user.id)
-      .eq('course_id', id)
+      .eq('course_id', course.id)
       .maybeSingle()
     setUserCourse(data)
   }
 
   const submitGrade = async () => {
-    if (!user || !selectedGrade) return
+    if (!user || !selectedGrade || !courseId) return
     await supabase.from('user_courses').update({ grade: selectedGrade }).eq('id', userCourse.id)
     const { data } = await supabase
       .from('user_courses')
       .select('*, courses(*)')
       .eq('user_id', user.id)
-      .eq('course_id', id)
+      .eq('course_id', courseId)
       .maybeSingle()
     setUserCourse(data)
     setShowGradeForm(false)
@@ -196,8 +204,22 @@ const CoursePage = () => {
             {course.department && <span>{course.department}</span>}
           </div>
 
-          {course.description && (
+          {course.learning_outcomes && (
             <div className="mt-6">
+              <h3 className="text-sm font-semibold text-gray-700 mb-2">Learning outcomes</h3>
+              <p className="text-gray-600 text-sm whitespace-pre-line">{course.learning_outcomes}</p>
+            </div>
+          )}
+
+          {course.content && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-700 mb-2">Content</h3>
+              <p className="text-gray-600 text-sm whitespace-pre-line">{course.content}</p>
+            </div>
+          )}
+
+          {course.description && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
               <h3 className="text-sm font-semibold text-gray-700 mb-2">Description</h3>
               <p className="text-gray-600 text-sm">{course.description}</p>
             </div>
@@ -216,6 +238,21 @@ const CoursePage = () => {
               />
             </div>
           )}
+
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">Additional information</h3>
+            <div className="text-sm text-gray-600 space-y-1">
+              {course.teaching_language && (
+                <p><span className="font-medium">Teaching Language:</span> {course.teaching_language}</p>
+              )}
+              {course.teaching_period && (
+                <p><span className="font-medium">Teaching Period:</span> {course.teaching_period}</p>
+              )}
+              {course.period && (
+                <p><span className="font-medium">Teaching Period:</span> {course.period}</p>
+              )}
+            </div>
+          </div>
 
           {userCourse && (
             <div className="mt-4 p-3 bg-gray-50 rounded">
