@@ -60,7 +60,7 @@ app.post('/api/extract-grades', async (req, res) => {
       // First try exact match
       let { data: matchingCourse } = await supabase
         .from('courses')
-        .select('id')
+        .select('id, code')
         .eq('code', course.courseCode)
         .single()
       
@@ -68,7 +68,7 @@ app.post('/api/extract-grades', async (req, res) => {
       if (!matchingCourse) {
         const { data: fuzzyMatches } = await supabase
           .from('courses')
-          .select('id')
+          .select('id, code')
           .or(`code.ilike.%${cleanCode}%,code.ilike.%${course.courseCode}%`)
         
         if (fuzzyMatches && fuzzyMatches.length > 0) {
@@ -160,7 +160,16 @@ app.post('/api/extract-grades', async (req, res) => {
     }
     
     console.log('Final response:', { imported, legacy, total: courses.length, gradesExtracted: courses.map(c => ({ code: c.courseCode, grade: c.grade, date: c.completionDate })) })
-    res.json({ success: true, imported, legacy, total: courses.length, failedCourses: failed, gradesExtracted: courses.map(c => ({ code: c.courseCode, grade: c.grade, date: c.completionDate })) })
+    
+    // Delete the uploaded PDF after extraction for privacy
+    try {
+      await supabase.storage.from('transcripts').remove([pdfUrl.split('/').pop()!])
+      console.log('PDF deleted after extraction')
+    } catch (deleteErr) {
+      console.log('PDF cleanup warning:', deleteErr)
+    }
+    
+    res.json({ success: true, imported, legacy, total: courses.length, failedCourses: failed, gradesExtracted: courses.map(c => ({ code: c.courseCode, grade: c.grade, date: c.completionDate })), note: legacy > 0 ? `${legacy} course(s) marked as legacy (not found in Aalto catalog)` : undefined })
   } catch (error) {
     console.error('Extract grades error:', error)
     res.status(500).json({ error: 'Failed to extract grades' })

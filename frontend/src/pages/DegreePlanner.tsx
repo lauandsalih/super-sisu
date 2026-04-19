@@ -76,19 +76,30 @@ const DegreePlanner = () => {
       const { data: { user } } = await supabase.auth.getUser()
 
       if (user) {
-        const { data } = await supabase
-          .from('user_courses')
-          .select('*, courses(*)')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
+        const [coursesData, userData] = await Promise.all([
+          supabase
+            .from('user_courses')
+            .select('*, courses(*)')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('users')
+            .select('graduation_date')
+            .eq('id', user.id)
+            .single()
+        ])
 
-        if (data) {
-          const completed = data.filter((uc: any) => uc.status === 'completed')
-          const current = data.filter((uc: any) => uc.status === 'current')
-          const planned = data.filter((uc: any) => uc.status === 'planned')
+        if (coursesData.data) {
+          const completed = coursesData.data.filter((uc: any) => uc.status === 'completed')
+          const current = coursesData.data.filter((uc: any) => uc.status === 'current')
+          const planned = coursesData.data.filter((uc: any) => uc.status === 'planned')
           setCompletedCourses(completed)
           setCurrentCourses(current)
           setPlannedCourses(planned)
+        }
+        
+        if (userData.data?.graduation_date) {
+          setGoalDate(userData.data.graduation_date)
         }
       }
       setLoading(false)
@@ -749,6 +760,43 @@ const DegreePlanner = () => {
                   </div>
                 </div>
               </div>
+              <div className="text-xs text-gray-500 mt-1">
+                <span>GPA: </span>
+                <span className="font-medium text-gray-700">
+                  {(() => {
+                    const now = new Date()
+                    const currentMonth = now.getMonth() + 1
+                    const currentYear = now.getFullYear()
+                    let currentPeriod = 0
+                    if (currentMonth >= 9 && currentMonth <= 10) currentPeriod = 1
+                    else if (currentMonth >= 11 && currentMonth <= 12) currentPeriod = 2
+                    else if (currentMonth >= 1 && currentMonth <= 2) currentPeriod = 3
+                    else if (currentMonth >= 3 && currentMonth <= 4) currentPeriod = 4
+                    else if (currentMonth >= 5 && currentMonth <= 6) currentPeriod = 5
+                    
+                    const gradedCourses = completedCourses.filter((uc: any) => {
+                      if (uc.grade == null || !uc.period) return false
+                      const p = parsePeriod(uc.period)
+                      if (!p || !p.year) return false
+                      if (p.year === currentYear && p.period === currentPeriod) return false
+                      if (p.year === currentYear - 1 && currentPeriod <= 2 && p.period > 2) return true
+                      if (p.year === currentYear && p.period < currentPeriod && p.period > 2) return true
+                      if (p.year < currentYear) return true
+                      return false
+                    })
+                    const gradedCredits = gradedCourses.reduce((sum, uc) => sum + (uc.courses?.credits || 0), 0)
+                    const gradePoints = gradedCourses.reduce((sum, uc) => sum + ((uc.grade || 0) * (uc.courses?.credits || 0)), 0)
+                    const gpa = gradedCredits > 0 ? gradePoints / gradedCredits : 0
+                    return gpa.toFixed(2)
+                  })()}
+                </span>
+                {Object.keys(gradeAdjustments).length > 0 && (
+                  <>
+                    <span className="mx-1">→</span>
+                    <span className="font-medium text-blue-600">{projectedGPA.toFixed(2)}</span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -787,19 +835,17 @@ const DegreePlanner = () => {
               <input
                 type="date"
                 value={goalDate}
-                onChange={(e) => setGoalDate(e.target.value)}
+                onChange={async (e) => {
+                  const newDate = e.target.value
+                  setGoalDate(newDate)
+                  const { data: { user } } = await supabase.auth.getUser()
+                  if (user) {
+                    await supabase.from('users').upsert({ id: user.id, graduation_date: newDate }, { onConflict: 'id' })
+                  }
+                }}
                 className="text-sm border rounded px-2 py-1"
               />
             </div>
-            <button
-              onClick={() => setEditingGradeModal(true)}
-              className="ml-4 text-xs bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 font-medium shadow-sm flex items-center gap-1"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
-              Modify Grades
-            </button>
           </div>
         </div>
 
@@ -1000,6 +1046,54 @@ const DegreePlanner = () => {
           <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold">GPA Progress</h2>
+              <div className="flex items-center gap-4">
+                {(() => {
+                  const now = new Date()
+                  const currentMonth = now.getMonth() + 1
+                  const currentYear = now.getFullYear()
+                  let currentPeriod = 0
+                  if (currentMonth >= 9 && currentMonth <= 10) currentPeriod = 1
+                  else if (currentMonth >= 11 && currentMonth <= 12) currentPeriod = 2
+                  else if (currentMonth >= 1 && currentMonth <= 2) currentPeriod = 3
+                  else if (currentMonth >= 3 && currentMonth <= 4) currentPeriod = 4
+                  else if (currentMonth >= 5 && currentMonth <= 6) currentPeriod = 5
+                  
+                  const gradedCourses = completedCourses.filter((uc: any) => {
+                    if (uc.grade == null || !uc.period) return false
+                    const p = parsePeriod(uc.period)
+                    if (!p || !p.year) return false
+                    if (p.year === currentYear && p.period === currentPeriod) return false
+                    if (p.year === currentYear - 1 && currentPeriod <= 2 && p.period > 2) return true
+                    if (p.year === currentYear && p.period < currentPeriod && p.period > 2) return true
+                    if (p.year < currentYear) return true
+                    return false
+                  })
+                  const gradedCredits = gradedCourses.reduce((sum, uc) => sum + (uc.courses?.credits || 0), 0)
+                  const gradePoints = gradedCourses.reduce((sum, uc) => sum + ((uc.grade || 0) * (uc.courses?.credits || 0)), 0)
+                  const currentGPA = gradedCredits > 0 ? gradePoints / gradedCredits : 0
+                  return currentGPA > 0 ? (
+                    <>
+                      <span className="text-sm text-gray-600">
+                        Current GPA: <span className="font-bold text-gray-900">{currentGPA.toFixed(2)}</span>
+                      </span>
+                      {Object.keys(gradeAdjustments).length > 0 && (
+                        <span className="text-sm text-blue-600">
+                          → Modified: <span className="font-bold text-blue-600">{projectedGPA.toFixed(2)}</span>
+                        </span>
+                      )}
+                    </>
+                  ) : null
+                })()}
+                <button
+                  onClick={() => setEditingGradeModal(true)}
+                  className="text-xs bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 font-medium shadow-sm flex items-center gap-1"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  Modify Grades
+                </button>
+              </div>
             </div>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">

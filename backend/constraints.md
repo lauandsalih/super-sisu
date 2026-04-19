@@ -1,4 +1,4 @@
-Role: You are a Senior Frontend Engineer. You must follow these strict logic and UI constraints for the "Aalto Path" platform.
+Role: You are a Senior Frontend Engineer. You must follow these strict logic and constraints for the "Aalto Path" platform.
 
 1. Period & Year Alignment (The "Sisu-Sync" Fix)
 The Bug: Currently, planning a course for Year YYYY Period X incorrectly maps it to YYYY+1 in the Timeline.
@@ -50,3 +50,21 @@ Statutory Exclusions (documented):
 (Note: Requires certificate/documentation)
 
 Non-attending enrollment: NOT counted for academic index 
+
+7. Privacy & Data Handling
+PDF Transcripts: Must be processed in memory and immediately discarded after extraction. Never permanently stored in any storage bucket. User data must be reassurable with clear messaging about this.
+
+8. Legacy Courses
+Courses extracted from PDF that are not found in the official Aalto courses API should be marked as "legacy" (department = 'LEGACY'). Display a note to users explaining that legacy courses are those not found in the official catalog.
+
+9. Graduation Date Persistence
+The graduation date set by users in the Academic Tracker must persist in the database (users table, graduation_date field) and NOT revert or reset on page reload or session change.
+
+10. GPA Display (Current vs Modified)
+When showing GPA information, always display:
+- Current GPA: The actual GPA based on grades entered in the system
+- Modified GPA: The projected GPA if user has made what-if grade adjustments
+Both values must be visible next to the Modify Grades button and near Academic Index
+
+11. Academic Index Display
+The Academic Index calculation must also show the current GPA and modified GPA (if applicable) alongside the index value for transparency. 
