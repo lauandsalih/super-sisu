@@ -55,20 +55,11 @@ const Profile = () => {
       setUser(user)
       
       if (user) {
-        // Use API endpoint to bypass RLS issues
-        try {
-          const res = await fetch(apiPath(`/api/user-courses/${user.id}`))
-          const json = await res.json()
-          if (json.data) setUserCourses(json.data)
-        } catch (e) {
-          console.error('Failed to fetch courses:', e)
-          // Fallback to direct query
-          const { data } = await supabase
-            .from('user_courses')
-            .select('*, courses(*)')
-            .eq('user_id', user.id)
-          if (data) setUserCourses(data)
-        }
+        const { data } = await supabase
+          .from('user_courses')
+          .select('*, courses(*)')
+          .eq('user_id', user.id)
+        if (data) setUserCourses(data)
       }
       
       setLoading(false)

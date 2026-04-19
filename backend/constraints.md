@@ -1,1 +1,52 @@
-Role: You are a Senior Frontend Engineer. You must follow these strict logic and UI constraints for the "Aalto Path" platform.1. Period & Year Alignment (The "Sisu-Sync" Fix)The Bug: Currently, planning a course for Year YYYY Period X incorrectly maps it to YYYY+1 in the Timeline.The Fix: Ensure absolute parity between the selection and the display. If a user selects 2026, the course must appear under the 2026 column in the Timeline. This applies to the Search results, Planned courses, and Completed courses.2. Naming ConventionsStrict Rule: Replace all instances of P1, P2, P3, P4, P5 with Roman Numerals: I, II, III, IV, V.3. Timeline X-Axis & Year IncrementsThe x-axis for both GPA and Credit graphs is based on "Rows" (Periods).Starting Point: The first completion period starts at coordinates (0,0).Year Labeling: The Year (e.g., 2025) must be displayed directly under the first period label.Increment Logic: Every time the timeline encounters Period III, it signifies a new academic cycle. Increment the Year label by +1 specifically under the Period III that follows a previous year's Period I.4. Multi-Period Planning & VisibilityMulti-Select: Users must be able to select multiple periods for a single course (e.g., a course running through Periods I and II).Timeline Mirroring: If a course is planned for multiple periods, it must appear as a visible entry in every corresponding period column in the Timeline.Inline Editing: Allow users to click/select a course directly in the Timeline to:Change its assigned period.Add it to an additional period without removing it from the current one.5. Graph Tooltip ConsistencyWhen hovering over the GPA or Credit graphs (Recharts), the "Hover Preview/Tooltip" data must be mathematically consistent with the specific data point $(x, y)$ the mouse is currently touching. No offset or mismatched labeling.After the first I in the x-axis, no other I should be labeled with a year. 
+Role: You are a Senior Frontend Engineer. You must follow these strict logic and UI constraints for the "Aalto Path" platform.
+
+1. Period & Year Alignment (The "Sisu-Sync" Fix)
+The Bug: Currently, planning a course for Year YYYY Period X incorrectly maps it to YYYY+1 in the Timeline.
+The Fix: Ensure absolute parity between the selection and the display. If a user selects 2026, the course must appear under the 2026 column in the Timeline. This applies to the Search results, Planned courses, and Completed courses.
+
+2. Naming Conventions
+Strict Rule: Replace all instances of P1, P2, P3, P4, P5 with Roman Numerals: I, II, III, IV, V.
+
+3. Timeline X-Axis & Year Increments
+The x-axis for both GPA and Credit graphs is based on "Rows" (Periods).
+Starting Point: The first completion period starts at coordinates (0,0).
+Year Labeling: The Year (e.g., 2025) must be displayed directly under the first period label.
+Increment Logic: Every time the timeline encounters Period III, it signifies a new academic cycle. Increment the Year label by +1 specifically under the Period III that follows a previous year's Period I.
+
+4. Multi-Period Planning & Visibility
+Multi-Select: Users must be able to select multiple periods for a single course (e.g., a course running through Periods I and II).
+Timeline Mirroring: If a course is planned for multiple periods, it must appear as a visible entry in every corresponding period column in the Timeline.
+Inline Editing: Allow users to click/select a course directly in the Timeline to:
+- Change its assigned period.
+- Add it to an additional period without removing it from the current one.
+
+5. Graph Tooltip Consistency
+When hovering over the GPA or Credit graphs (Recharts), the "Hover Preview/Tooltip" data must be mathematically consistent with the specific data point (x, y) the mouse is currently touching. No offset or mismatched labeling.
+After the first I in the x-axis, no other I should be labeled with a year.
+
+6. Academic Index Calculation
+Formula: (credits × credit-weighted GPA) / number of academic semesters enrolled as an attending student (not including the current semester)
+
+Calculation Rules (exchanges 2023-24 onwards, all schools):
+- Only studies entered in the Aalto student register by the deadline are counted
+- Only studies completed while the current study right has been valid
+- Changed study right (same field): credits/semesters under expired study right are NOT counted
+- Changed study right (different field): depends on exchange school applied to
+- Graduated bachelor → same field master: bachelor credits/semesters ARE counted
+- Credits before study right start: NOT counted (except Open University admittance credits below)
+- Study right in multiple fields: only courses from the field of the applied exchange place count
+- Non-attending semesters: NOT counted
+
+Open University Credits (basis of admittance):
+- BIZ: 42 credits → +1.5 semesters added
+- CHEM, ELEC, ENG, SCI: 27 credits → +1 semester added
+- Student must inform about OU studies in application
+
+Statutory Exclusions (documented):
+- Military/non-military service
+- Maternity/paternity/parental leave
+- Medical condition preventing study
+- AYY board service
+(Note: Requires certificate/documentation)
+
+Non-attending enrollment: NOT counted for academic index 

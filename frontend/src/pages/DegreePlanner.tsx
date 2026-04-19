@@ -102,13 +102,20 @@ const DegreePlanner = () => {
   }
 
   const getPeriodEndMonth = (period: number): number => {
+    // Academic year periods - period 1,2 are in fall (year YYYY), periods 3,4,5 are in spring (year YYYY+1)
+    // P1 (Fall): September -> month 9
+    // P2 (Fall): November -> month 11
+    // P3 (Spring): January (year+1) -> month 1
+    // P4 (Spring): March (year+1) -> month 3
+    // P5 (Spring): May (year+1) -> month 5
+    // Summer: July -> month 7
     const periodEndMonths: Record<number, number> = {
-      1: 9,  // P1 ends in October
-      2: 11, // P2 ends in December
-      3: 1,  // P3 ends in February
-      4: 3,  // P4 ends in April
-      5: 5,  // P5 ends in June
-      0: 7   // Summer ends in August
+      1: 9,   // P1 ends in October (month 9 + 1)
+      2: 11,  // P2 ends in December (month 11 + 1)
+      3: 1,   // P3 ends in February (month 1 + 1)
+      4: 3,   // P4 ends in April (month 3 + 1)
+      5: 5,   // P5 ends in June (month 5 + 1)
+      0: 7    // Summer ends in August (month 7 + 1)
     }
     return periodEndMonths[period] || 11
   }
@@ -490,10 +497,12 @@ const DegreePlanner = () => {
     const firstPlannedIdx = combinedData.findIndex(d => d.plannedOnlyCredits && d.plannedOnlyCredits > 0)
     const lastPlannedIdx = combinedData.findLastIndex(d => d.plannedOnlyCredits && d.plannedOnlyCredits > 0)
     
-    // Find last completed period AND stop actual line there
-    const lastCompletedIdxForActual = combinedData.findLastIndex(d => d.actualCredits > 0)
+    // Find period that is currently happening (hasn't ended yet) and stop actual line there
+    // The actual progress shows up to current period (including it)
+    const activePeriodIdx = combinedData.findIndex(d => d.isCurrentOrFuture)
+    const lastCompletedIdxForActual = activePeriodIdx >= 0 ? activePeriodIdx - 1 : combinedData.length - 1
     
-    // Set all actual values beyond last completed to null (stop the line)
+    // Set all actual values beyond last completed to null (stop the line at current period)
     for (let i = 0; i < combinedData.length; i++) {
       if (i > lastCompletedIdxForActual) {
         combinedData[i].actualCredits = null as any
@@ -690,7 +699,26 @@ const DegreePlanner = () => {
             <div className="text-center border-l pl-4">
               <div className="font-semibold text-black">
                 {(() => {
-                  const gradedCourses = completedCourses.filter((uc: any) => uc.grade != null && uc.period)
+                  const now = new Date()
+                  const currentMonth = now.getMonth() + 1
+                  const currentYear = now.getFullYear()
+                  let currentPeriod = 0
+                  if (currentMonth >= 9 && currentMonth <= 10) currentPeriod = 1
+                  else if (currentMonth >= 11 && currentMonth <= 12) currentPeriod = 2
+                  else if (currentMonth >= 1 && currentMonth <= 2) currentPeriod = 3
+                  else if (currentMonth >= 3 && currentMonth <= 4) currentPeriod = 4
+                  else if (currentMonth >= 5 && currentMonth <= 6) currentPeriod = 5
+                  
+                  const gradedCourses = completedCourses.filter((uc: any) => {
+                    if (uc.grade == null || !uc.period) return false
+                    const p = parsePeriod(uc.period)
+                    if (!p || !p.year) return false
+                    if (p.year === currentYear && p.period === currentPeriod) return false
+                    if (p.year === currentYear - 1 && currentPeriod <= 2 && p.period > 2) return true
+                    if (p.year === currentYear && p.period < currentPeriod && p.period > 2) return true
+                    if (p.year < currentYear) return true
+                    return false
+                  })
                   const gradedCredits = gradedCourses.reduce((sum, uc) => sum + (uc.courses?.credits || 0), 0)
                   const gradePoints = gradedCourses.reduce((sum, uc) => sum + ((uc.grade || 0) * (uc.courses?.credits || 0)), 0)
                   const gpa = gradedCredits > 0 ? gradePoints / gradedCredits : 0
@@ -707,7 +735,20 @@ const DegreePlanner = () => {
                   return academicIndex.toFixed(2)
                 })()}
               </div>
-              <div className="text-gray-500">Academic Index</div>
+              <div className="flex items-center justify-center gap-1 text-gray-500">
+                Academic Index
+                <div className="group relative">
+                  <svg className="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="hidden group-hover:block absolute z-50 left-0 bottom-full mb-2 w-72 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg">
+                    <p className="font-semibold mb-1">Academic Index Calculation</p>
+                    <p className="mb-2">(Credits × GPA) ÷ Academic semesters</p>
+                    <p className="text-gray-400 text-[10px]">Excludes current semester. Based on courses with grades entered before the deadline.</p>
+                    <p className="mt-2 text-[10px] text-gray-400 border-t border-gray-700 pt-2">Note: For official applications, verify with your school's exchange coordinator as policies may vary.</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -750,8 +791,73 @@ const DegreePlanner = () => {
                 className="text-sm border rounded px-2 py-1"
               />
             </div>
+            <button
+              onClick={() => setEditingGradeModal(true)}
+              className="ml-4 text-xs bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 font-medium shadow-sm flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              Modify Grades
+            </button>
           </div>
         </div>
+
+        {/* Grade Adjustments Quick Panel - Inline */}
+        {Object.keys(gradeAdjustments).length > 0 && (
+          <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl border border-green-200 p-4 mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-green-800">What-if Grade Adjustments</h2>
+              <div className="flex items-center gap-4">
+                <div className="text-sm">
+                  <span className="text-gray-600">Projected GPA: </span>
+                  <span className="font-bold text-green-600 text-lg">{projectedGPA.toFixed(2)}</span>
+                </div>
+                <button
+                  onClick={() => setGradeAdjustments({})}
+                  className="text-xs text-gray-500 hover:text-gray-700 underline"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+              {Object.entries(gradeAdjustments).map(([courseId, grade]) => {
+                const course = [...completedCourses, ...plannedCourses].find(c => c.id === courseId)
+                if (!course) return null
+                return (
+                  <div key={courseId} className="bg-white rounded-lg border border-green-200 p-2 text-sm">
+                    <div className="font-mono text-xs text-green-700">{course.courses?.code}</div>
+                    <div className="flex items-center justify-between">
+                      <input
+                        type="number"
+                        min="1"
+                        max="5"
+                        value={grade ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? null : Number(e.target.value)
+                          setGradeAdjustments(prev => ({ ...prev, [courseId]: val }))
+                        }}
+                        className="w-12 text-sm border rounded px-1 py-0.5 text-center font-medium"
+                        placeholder="-"
+                      />
+                      <button
+                        onClick={() => {
+                          const newAdjustments = { ...gradeAdjustments }
+                          delete newAdjustments[courseId]
+                          setGradeAdjustments(newAdjustments)
+                        }}
+                        className="text-gray-400 hover:text-red-500 ml-1"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Credit Progress Graph */}
         {chartData.length > 0 && (
@@ -894,12 +1000,6 @@ const DegreePlanner = () => {
           <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold">GPA Progress</h2>
-              <button
-                onClick={() => setEditingGradeModal(true)}
-                className="text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
-              >
-                + Modify Grades
-              </button>
             </div>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
