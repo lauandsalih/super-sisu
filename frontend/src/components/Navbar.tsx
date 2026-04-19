@@ -17,12 +17,6 @@ export default function Navbar() {
         
         <nav className="flex items-center gap-8">
           <Link 
-            to="/search" 
-            className={`text-sm font-medium pb-2 border-b-2 ${isActive('/search') ? 'text-black border-[#0065BD]' : 'text-gray-500 border-transparent hover:text-black'}`}
-          >
-            Search Courses
-          </Link>
-          <Link 
             to="/degree" 
             className={`text-sm font-medium pb-2 border-b-2 ${isActive('/degree') ? 'text-black border-[#0065BD]' : 'text-gray-500 border-transparent hover:text-black'}`}
           >
@@ -33,6 +27,12 @@ export default function Navbar() {
             className={`text-sm font-medium pb-2 border-b-2 ${isActive('/profile') ? 'text-black border-[#0065BD]' : 'text-gray-500 border-transparent hover:text-black'}`}
           >
             My Profile
+          </Link>
+          <Link 
+            to="/search" 
+            className={`text-sm font-medium pb-2 border-b-2 ${isActive('/search') ? 'text-black border-[#0065BD]' : 'text-gray-500 border-transparent hover:text-black'}`}
+          >
+            Search Courses
           </Link>
         </nav>
 

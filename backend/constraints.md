@@ -67,4 +67,16 @@ When showing GPA information, always display:
 Both values must be visible next to the Modify Grades button and near Academic Index
 
 11. Academic Index Display
-The Academic Index calculation must also show the current GPA and modified GPA (if applicable) alongside the index value for transparency. 
+The Academic Index calculation must also show the current GPA and modified GPA (if applicable) alongside the index value for transparency.
+Placement: GPA values must be displayed to the RIGHT of the Academic Index value, in the same row and with matching font styling.
+
+12. Storage Bucket Policies
+Broad SELECT policies on storage.objects must NOT be created or maintained. Each storage bucket must have restrictive policies:
+- Only the file owner (authenticated user) can access their own files
+- Or if files are temporary (e.g., PDF transcripts), policies can be removed entirely after implementing immediate deletion after processing
+
+13. Navigation Page Order
+Pages must be ordered: Academic Tracker → My Profile → Search Courses (left to right)
+
+14. Expandable Course Cards (Search Page)
+When clicking a course card in Search Courses, the card must expand inline to show all course details and features (info, statistics, plan buttons) instead of navigating to a separate page. This keeps users in context and eliminates unnecessary page navigation. 

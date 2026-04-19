@@ -46,6 +46,7 @@ const SearchPage = () => {
   const [showMyCourses, setShowMyCourses] = useState(false)
   const [addingToPlan, setAddingToPlan] = useState<string | null>(null)
   const [selectedPlanPeriods, setSelectedPlanPeriods] = useState<string[]>(['2025 P1'])
+  const [expandedCourse, setExpandedCourse] = useState<string | null>(null)
   const { toggleFavorite, isFavorite } = useFavorites()
 
   const PLAN_PERIOD_OPTIONS = [
@@ -296,17 +297,20 @@ const SearchPage = () => {
 
             <div className="flex flex-col gap-4">
               {paginatedCourses.map((course) => (
-                <a
+                <div
                   key={course.id}
-                  href={"/course/" + course.id}
-                  className="bg-white rounded-xl border border-gray-200 p-5 block hover:shadow-md transition"
+                  onClick={() => setExpandedCourse(expandedCourse === course.id ? null : course.id)}
+                  className={`bg-white rounded-xl border p-5 cursor-pointer transition ${
+                    expandedCourse === course.id 
+                      ? 'border-blue-500 shadow-lg' 
+                      : 'border-gray-200 hover:shadow-md'
+                  }`}
                 >
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-blue-600 font-mono">{course.code}</span>
                       <button
                         onClick={(e) => {
-                          e.preventDefault()
                           e.stopPropagation()
                           toggleFavorite(course.id)
                         }}
@@ -358,77 +362,103 @@ const SearchPage = () => {
                       </span>
                     )}
                   </div>
-                  <div className="mt-3 pt-3 border-t flex items-center gap-2">
-                    <button
-                      onClick={async (e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        if (addingToPlan === course.id) {
-                          const { data: { user } } = await supabase.auth.getUser()
-                          if (user && selectedPlanPeriods.length > 0) {
-                            const { data: existingPlanned } = await supabase
-                              .from('user_courses')
-                              .select('id, period')
-                              .eq('user_id', user.id)
-                              .eq('course_id', course.id)
-                              .eq('status', 'planned')
-                              .maybeSingle()
+                  
+                  {expandedCourse === course.id && (
+                    <div className="mt-4 pt-4 border-t">
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <h4 className="text-sm font-semibold text-gray-700 mb-2">Course Info</h4>
+                          <div className="text-sm text-gray-600 space-y-1">
+                            <p><span className="font-medium">Code:</span> {course.code}</p>
+                            <p><span className="font-medium">Name:</span> {course.name}</p>
+                            <p><span className="font-medium">Credits:</span> {course.credits}</p>
+                            <p><span className="font-medium">Period:</span> {course.period || 'N/A'}</p>
+                            <p><span className="font-medium">Language:</span> {course.language || 'N/A'}</p>
+                            <p><span className="font-medium">Department:</span> {course.department || 'N/A'}</p>
+                          </div>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold text-gray-700 mb-2">Statistics</h4>
+                          <div className="text-sm text-gray-600 space-y-1">
+                            <p><span className="font-medium">Avg Grade:</span> {reviewStats[course.id]?.avgGrade || '-'}</p>
+                            <p><span className="font-medium">Ratings:</span> {reviewStats[course.id]?.ratingCount || 0}</p>
+                            <p><span className="font-medium">Avg Rating:</span> {reviewStats[course.id]?.avgRating || '-'}</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            if (addingToPlan === course.id) {
+                              const { data: { user } } = await supabase.auth.getUser()
+                              if (user && selectedPlanPeriods.length > 0) {
+                                const { data: existingPlanned } = await supabase
+                                  .from('user_courses')
+                                  .select('id, period')
+                                  .eq('user_id', user.id)
+                                  .eq('course_id', course.id)
+                                  .eq('status', 'planned')
+                                  .maybeSingle()
 
-                            if (existingPlanned) {
-                              const merged = Array.from(new Set([
-                                ...normalizePeriodList(existingPlanned.period),
-                                ...selectedPlanPeriods
-                              ]))
-                              await supabase
-                                .from('user_courses')
-                                .update({ period: merged.join(', ') })
-                                .eq('id', existingPlanned.id)
+                                if (existingPlanned) {
+                                  const merged = Array.from(new Set([
+                                    ...normalizePeriodList(existingPlanned.period),
+                                    ...selectedPlanPeriods
+                                  ]))
+                                  await supabase
+                                    .from('user_courses')
+                                    .update({ period: merged.join(', ') })
+                                    .eq('id', existingPlanned.id)
+                                } else {
+                                  await supabase.from('user_courses').insert({
+                                    user_id: user.id,
+                                    course_id: course.id,
+                                    status: 'planned',
+                                    period: selectedPlanPeriods.join(', '),
+                                    grade: null
+                                  })
+                                }
+                              }
+                              setAddingToPlan(null)
                             } else {
-                              await supabase.from('user_courses').insert({
-                                user_id: user.id,
-                                course_id: course.id,
-                                status: 'planned',
-                                period: selectedPlanPeriods.join(', '),
-                                grade: null
-                              })
+                              setAddingToPlan(course.id)
                             }
-                          }
-                          setAddingToPlan(null)
-                        } else {
-                          setAddingToPlan(course.id)
-                        }
-                      }}
-                      className={`text-xs px-3 py-1 rounded ${
-                        addingToPlan === course.id 
-                          ? 'bg-purple-600 text-white' 
-                          : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                      }`}
-                    >
-                      {addingToPlan === course.id ? 'Click to Add' : '+ Plan'}
-                    </button>
-                    {addingToPlan === course.id && (
-                      <select
-                        multiple
-                        value={selectedPlanPeriods}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => {
-                          const values = Array.from(e.target.selectedOptions).map((opt) => opt.value)
-                          setSelectedPlanPeriods(values)
-                        }}
-                        className="text-xs border rounded px-2 py-1 min-w-[170px] h-24"
-                      >
-                        {PLAN_PERIOD_OPTIONS.map((p) => (
-                          <option key={p} value={p}>{p}</option>
-                        ))}
-                      </select>
-                    )}
-                    {addingToPlan === course.id && (
-                      <span className="text-xs text-purple-700">
-                        {selectedPlanPeriods.length} selected
-                      </span>
-                    )}
-                  </div>
-                </a>
+                          }}
+                          className={`text-xs px-3 py-2 rounded ${
+                            addingToPlan === course.id 
+                              ? 'bg-purple-600 text-white' 
+                              : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                          }`}
+                        >
+                          {addingToPlan === course.id ? 'Click to Add' : '+ Plan'}
+                        </button>
+                        {addingToPlan === course.id && (
+                          <select
+                            multiple
+                            value={selectedPlanPeriods}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              const values = Array.from(e.target.selectedOptions).map((opt) => opt.value)
+                              setSelectedPlanPeriods(values)
+                            }}
+                            className="text-xs border rounded px-2 py-1 min-w-[170px] h-24"
+                          >
+                            {PLAN_PERIOD_OPTIONS.map((p) => (
+                              <option key={p} value={p}>{p}</option>
+                            ))}
+                          </select>
+                        )}
+                        {addingToPlan === course.id && (
+                          <span className="text-xs text-purple-700">
+                            {selectedPlanPeriods.length} selected
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
 

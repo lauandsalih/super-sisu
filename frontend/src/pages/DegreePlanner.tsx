@@ -707,8 +707,9 @@ const DegreePlanner = () => {
               <div className="font-semibold text-gray-600">{remaining}</div>
               <div className="text-gray-500">Remaining</div>
             </div>
-            <div className="text-center border-l pl-4">
-              <div className="font-semibold text-black">
+            <div className="text-center border-l pl-4 flex items-center justify-center">
+              <span className="text-gray-500 font-medium mr-1">Academic Index:</span>
+              <span className="font-semibold text-black mr-3">
                 {(() => {
                   const now = new Date()
                   const currentMonth = now.getMonth() + 1
@@ -745,57 +746,53 @@ const DegreePlanner = () => {
                   const academicIndex = gradedCredits > 0 && semesters > 0 ? (gpa * gradedCredits) / semesters : 0
                   return academicIndex.toFixed(2)
                 })()}
-              </div>
-              <div className="flex items-center justify-center gap-1 text-gray-500">
-                Academic Index
-                <div className="group relative">
-                  <svg className="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div className="hidden group-hover:block absolute z-50 left-0 bottom-full mb-2 w-72 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg">
-                    <p className="font-semibold mb-1">Academic Index Calculation</p>
-                    <p className="mb-2">(Credits × GPA) ÷ Academic semesters</p>
-                    <p className="text-gray-400 text-[10px]">Excludes current semester. Based on courses with grades entered before the deadline.</p>
-                    <p className="mt-2 text-[10px] text-gray-400 border-t border-gray-700 pt-2">Note: For official applications, verify with your school's exchange coordinator as policies may vary.</p>
-                  </div>
+              </span>
+              <span className="text-gray-400">|</span>
+              <span className="text-gray-500 font-medium ml-3 mr-1">GPA:</span>
+              <span className="font-semibold text-gray-700">
+                {(() => {
+                  const now = new Date()
+                  const currentMonth = now.getMonth() + 1
+                  const currentYear = now.getFullYear()
+                  let currentPeriod = 0
+                  if (currentMonth >= 9 && currentMonth <= 10) currentPeriod = 1
+                  else if (currentMonth >= 11 && currentMonth <= 12) currentPeriod = 2
+                  else if (currentMonth >= 1 && currentMonth <= 2) currentPeriod = 3
+                  else if (currentMonth >= 3 && currentMonth <= 4) currentPeriod = 4
+                  else if (currentMonth >= 5 && currentMonth <= 6) currentPeriod = 5
+                  
+                  const gradedCourses = completedCourses.filter((uc: any) => {
+                    if (uc.grade == null || !uc.period) return false
+                    const p = parsePeriod(uc.period)
+                    if (!p || !p.year) return false
+                    if (p.year === currentYear && p.period === currentPeriod) return false
+                    if (p.year === currentYear - 1 && currentPeriod <= 2 && p.period > 2) return true
+                    if (p.year === currentYear && p.period < currentPeriod && p.period > 2) return true
+                    if (p.year < currentYear) return true
+                    return false
+                  })
+                  const gradedCredits = gradedCourses.reduce((sum, uc) => sum + (uc.courses?.credits || 0), 0)
+                  const gradePoints = gradedCourses.reduce((sum, uc) => sum + ((uc.grade || 0) * (uc.courses?.credits || 0)), 0)
+                  const gpa = gradedCredits > 0 ? gradePoints / gradedCredits : 0
+                  return gpa.toFixed(2)
+                })()}
+              </span>
+              {Object.keys(gradeAdjustments).length > 0 && (
+                <>
+                  <span className="mx-1 text-blue-400">→</span>
+                  <span className="font-semibold text-blue-600">{projectedGPA.toFixed(2)}</span>
+                </>
+              )}
+              <div className="group relative ml-2">
+                <svg className="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="hidden group-hover:block absolute z-50 right-0 bottom-full mb-2 w-72 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg">
+                  <p className="font-semibold mb-1">Academic Index Calculation</p>
+                  <p className="mb-2">(Credits × GPA) ÷ Academic semesters</p>
+                  <p className="text-gray-400 text-[10px]">Excludes current semester. Based on courses with grades entered before the deadline.</p>
+                  <p className="mt-2 text-[10px] text-gray-400 border-t border-gray-700 pt-2">Note: For official applications, verify with your school's exchange coordinator as policies may vary.</p>
                 </div>
-              </div>
-              <div className="text-xs text-gray-500 mt-1">
-                <span>GPA: </span>
-                <span className="font-medium text-gray-700">
-                  {(() => {
-                    const now = new Date()
-                    const currentMonth = now.getMonth() + 1
-                    const currentYear = now.getFullYear()
-                    let currentPeriod = 0
-                    if (currentMonth >= 9 && currentMonth <= 10) currentPeriod = 1
-                    else if (currentMonth >= 11 && currentMonth <= 12) currentPeriod = 2
-                    else if (currentMonth >= 1 && currentMonth <= 2) currentPeriod = 3
-                    else if (currentMonth >= 3 && currentMonth <= 4) currentPeriod = 4
-                    else if (currentMonth >= 5 && currentMonth <= 6) currentPeriod = 5
-                    
-                    const gradedCourses = completedCourses.filter((uc: any) => {
-                      if (uc.grade == null || !uc.period) return false
-                      const p = parsePeriod(uc.period)
-                      if (!p || !p.year) return false
-                      if (p.year === currentYear && p.period === currentPeriod) return false
-                      if (p.year === currentYear - 1 && currentPeriod <= 2 && p.period > 2) return true
-                      if (p.year === currentYear && p.period < currentPeriod && p.period > 2) return true
-                      if (p.year < currentYear) return true
-                      return false
-                    })
-                    const gradedCredits = gradedCourses.reduce((sum, uc) => sum + (uc.courses?.credits || 0), 0)
-                    const gradePoints = gradedCourses.reduce((sum, uc) => sum + ((uc.grade || 0) * (uc.courses?.credits || 0)), 0)
-                    const gpa = gradedCredits > 0 ? gradePoints / gradedCredits : 0
-                    return gpa.toFixed(2)
-                  })()}
-                </span>
-                {Object.keys(gradeAdjustments).length > 0 && (
-                  <>
-                    <span className="mx-1">→</span>
-                    <span className="font-medium text-blue-600">{projectedGPA.toFixed(2)}</span>
-                  </>
-                )}
               </div>
             </div>
           </div>
