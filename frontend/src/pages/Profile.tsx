@@ -102,7 +102,7 @@ const Profile = () => {
     .reduce((sum, uc) => sum + (uc.courses?.credits || 0), 0)
 
   const avgGrade = gradedCourses.length > 0
-    ? gradedCourses.reduce((sum, uc) => sum + (uc.grade || 0), 0) / gradedCourses.length
+    ? gradedCourses.reduce((sum, uc) => sum + ((uc.grade || 0) * (uc.courses?.credits || 0)), 0) / gradedCourses.reduce((sum, uc) => sum + (uc.courses?.credits || 0), 0)
     : 0
 
   const deleteSelectedCourses = async () => {
@@ -178,7 +178,7 @@ const Profile = () => {
               <div className="text-2xl font-bold text-green-600">
                 {avgGrade > 0 ? avgGrade.toFixed(2) : '-'}
               </div>
-              <div className="text-sm text-gray-500">Avg Grade</div>
+              <div className="text-sm text-gray-500">GPA</div>
             </div>
             <div className="text-center p-4 bg-gray-50 rounded-lg">
               <div className="text-2xl font-bold text-purple-600">{userCourses.filter(uc => uc.status === 'completed').length}</div>
