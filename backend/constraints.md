@@ -87,4 +87,7 @@ Course page should display information in SISU-like format:
 - Content
 - Description
 - Prerequisites
-- Additional information (Teaching Language, Teaching Period) 
+- Additional information (Teaching Language, Teaching Period)
+
+16. Constraints Documentation
+All new features, requirements, and decisions must be documented in constraints.md. Do not make significant changes without recording them there first. 

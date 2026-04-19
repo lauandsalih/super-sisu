@@ -840,6 +840,7 @@ const DegreePlanner = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m8 4v10a2 2 0 01-2 2h-4m-4 0H8a2 2 0 01-2-2V7m4 4h8" />
                 </svg>
                 Modify
+                {goalDate && <span className="ml-1">({new Date(goalDate).toLocaleDateString('fi-FI')})</span>}
               </button>
             </div>
           </div>
@@ -921,17 +922,45 @@ const DegreePlanner = () => {
                 </button>
                 <button
                   onClick={async () => {
-                    const { data: { user } } = await supabase.auth.getUser()
-                    if (user) {
-                      const { error } = await supabase.from('users').upsert({ 
-                        id: user.id, 
-                        graduation_date: goalDate || null 
-                      }, { onConflict: 'id' })
+                    try {
+                      const { data: { user } } = await supabase.auth.getUser()
+                      if (!user) {
+                        alert('Not logged in')
+                        return
+                      }
+                      
+                      // First check if user record exists
+                      const { data: existing } = await supabase
+                        .from('users')
+                        .select('id')
+                        .eq('id', user.id)
+                        .maybeSingle()
+                      
+                      let error
+                      if (existing) {
+                        // Update existing record
+                        const result = await supabase
+                          .from('users')
+                          .update({ graduation_date: goalDate || null })
+                          .eq('id', user.id)
+                        error = result.error
+                      } else {
+                        // Insert new record
+                        const result = await supabase
+                          .from('users')
+                          .insert({ id: user.id, graduation_date: goalDate || null })
+                        error = result.error
+                      }
+                      
                       if (error) {
-                        alert('Error: ' + error.message)
+                        alert('Error saving: ' + error.message)
+                        console.error('Save error:', error)
                       } else {
                         setEditingGradDateModal(false)
                       }
+                    } catch (e) {
+                      console.error('Exception:', e)
+                      alert('Error: ' + e)
                     }
                   }}
                   className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"

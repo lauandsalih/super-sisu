@@ -12,6 +12,7 @@ type Course = {
   language: string
   department: string | null
   prerequisites: string | null
+  description: string | null
 }
 
 type CourseRealization = {
@@ -218,17 +219,21 @@ const CoursePage = () => {
             {course.department && <span>{course.department}</span>}
           </div>
 
-          {realization?.learning_outcomes && (
-            <div className="mt-6 bg-blue-50 rounded-lg p-4">
-              <h3 className="text-base font-semibold text-gray-800 mb-2">Learning outcomes</h3>
-              <p className="text-gray-700 text-sm whitespace-pre-line leading-relaxed">{realization.learning_outcomes}</p>
+          {course.description?.includes('Learning outcomes') && (
+            <div className="mt-6 mb-6 bg-blue-50 rounded-lg p-4">
+              <h3 className="text-base font-semibold text-gray-800 mb-2" style={{ textTransform: 'capitalize' }}>Learning outcomes</h3>
+              <p className="text-gray-700 text-sm whitespace-pre-line leading-relaxed">
+                {course.description.split('Learning outcomes:')[1]?.replace(/\n+$/, '').trim()}
+              </p>
             </div>
           )}
 
-          {realization?.content && (
-            <div className="mt-4 bg-green-50 rounded-lg p-4">
+          {course.description?.includes('Content:') && (
+            <div className="mt-6 mb-6 bg-green-50 rounded-lg p-4">
               <h3 className="text-base font-semibold text-gray-800 mb-2">Content</h3>
-              <p className="text-gray-700 text-sm whitespace-pre-line leading-relaxed">{realization.content}</p>
+              <p className="text-gray-700 text-sm whitespace-pre-line leading-relaxed">
+                {course.description.split('Content:')[1]?.split('Learning outcomes:')[0]?.replace(/\n+$/, '').trim() || course.description.split('Content:')[1]?.replace(/\n+$/, '').trim()}
+              </p>
             </div>
           )}
 
