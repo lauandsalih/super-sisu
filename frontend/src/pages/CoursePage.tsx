@@ -30,7 +30,7 @@ type Review = {
 }
 
 const CoursePage = () => {
-  const { code } = useParams()
+  const { id } = useParams()
   const [course, setCourse] = useState<Course | null>(null)
   const [reviews, setReviews] = useState<Review[]>([])
   const [exams, setExams] = useState<any[]>([])
@@ -51,45 +51,43 @@ const CoursePage = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: courseData } = await supabase
+      const { data } = await supabase
         .from('courses')
         .select('*')
-        .eq('code', code)
+        .eq('id', id)
         .single()
       
-      if (courseData) {
-        setCourse(courseData)
+      if (data) {
+        setCourse(data)
       } else {
         setError(true)
       }
 
-      if (courseData) {
-        const { data: reviewsData } = await supabase
-          .from('reviews')
-          .select('*')
-          .eq('course_id', courseData.id)
-          .order('created_at', { ascending: false })
-        
-        setReviews(reviewsData || [])
+      const { data: reviewsData } = await supabase
+        .from('reviews')
+        .select('*')
+        .eq('course_id', id)
+        .order('created_at', { ascending: false })
+      
+      setReviews(reviewsData || [])
 
-        const { data: examsData } = await supabase
-          .from('exams')
-          .select('*')
-          .eq('course_id', courseData.id)
-          .order('year', { ascending: false })
-        
-        setExams(examsData || [])
+      const { data: examsData } = await supabase
+        .from('exams')
+        .select('*')
+        .eq('course_id', id)
+        .order('year', { ascending: false })
+      
+      setExams(examsData || [])
 
-        const currentUser = (await supabase.auth.getUser()).data.user
-        if (currentUser) {
-          const { data: uc } = await supabase
-            .from('user_courses')
-            .select('*, courses(*)')
-            .eq('user_id', currentUser.id)
-            .eq('course_id', courseData.id)
-            .maybeSingle()
-          setUserCourse(uc)
-        }
+      const currentUser = (await supabase.auth.getUser()).data.user
+      if (currentUser) {
+        const { data: uc } = await supabase
+          .from('user_courses')
+          .select('*, courses(*)')
+          .eq('user_id', currentUser.id)
+          .eq('course_id', id)
+          .maybeSingle()
+        setUserCourse(uc)
       }
 
       setLoading(false)
@@ -97,14 +95,12 @@ const CoursePage = () => {
     fetchData()
 
     supabase.auth.getUser().then(({ data }) => setUser(data.user))
-  }, [code])
-
-  const courseId = course?.id
+  }, [id])
 
   const submitReview = async () => {
-    if (!user || !courseId) return
+    if (!user) return
     await supabase.from('reviews').insert({
-      course_id: courseId,
+      course_id: id,
       user_id: user.id,
       workload: reviewWorkload,
       difficulty: reviewDifficulty,
@@ -115,7 +111,7 @@ const CoursePage = () => {
     const { data } = await supabase
       .from('reviews')
       .select('*')
-      .eq('course_id', courseId)
+      .eq('course_id', id)
       .order('created_at', { ascending: false })
     
     setReviews(data || [])
@@ -137,19 +133,19 @@ const CoursePage = () => {
       .from('user_courses')
       .select('*, courses(*)')
       .eq('user_id', user.id)
-      .eq('course_id', course.id)
+      .eq('course_id', id)
       .maybeSingle()
     setUserCourse(data)
   }
 
   const submitGrade = async () => {
-    if (!user || !selectedGrade || !courseId) return
+    if (!user || !selectedGrade) return
     await supabase.from('user_courses').update({ grade: selectedGrade }).eq('id', userCourse.id)
     const { data } = await supabase
       .from('user_courses')
       .select('*, courses(*)')
       .eq('user_id', user.id)
-      .eq('course_id', courseId)
+      .eq('course_id', id)
       .maybeSingle()
     setUserCourse(data)
     setShowGradeForm(false)

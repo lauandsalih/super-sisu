@@ -282,7 +282,7 @@ const SearchPage = () => {
               {paginatedCourses.map((course) => (
                 <a
                   key={course.id}
-                  href={"/course/" + encodeURIComponent(course.code)}
+                  href={"/course/" + course.id}
                   className="bg-white rounded-xl border border-gray-200 p-5 block hover:shadow-md transition"
                 >
                   <div className="flex justify-between items-start mb-2">
