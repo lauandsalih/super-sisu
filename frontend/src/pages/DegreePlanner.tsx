@@ -63,6 +63,7 @@ const DegreePlanner = () => {
   const [editingGradeModal, setEditingGradeModal] = useState(false)
   const [gradeAdjustments, setGradeAdjustments] = useState<Record<string, number | null>>({})
   const [includePlanned, setIncludePlanned] = useState(false)
+  const [editingGradDateModal, setEditingGradDateModal] = useState(false)
 
   const PLAN_PERIOD_OPTIONS = [
     '2023-2024 I', '2023-2024 II', '2023-2024 III', '2023-2024 IV', '2023-2024 V', '2023-2024 Summer',
@@ -831,27 +832,14 @@ const DegreePlanner = () => {
             </div>
             <div className="flex items-center gap-1">
               <label className="text-xs text-gray-500">Graduation:</label>
-              <input
-                type="date"
-                value={goalDate}
-                onChange={(e) => setGoalDate(e.target.value)}
-                className="text-sm border rounded px-2 py-1"
-              />
               <button
-                onClick={async () => {
-                  const { data: { user } } = await supabase.auth.getUser()
-                  if (user && goalDate) {
-                    const { error } = await supabase.from('users').upsert({ id: user.id, graduation_date: goalDate }, { onConflict: 'id' })
-                    if (!error) {
-                      alert('Graduation date saved!')
-                    }
-                  } else {
-                    alert('Please select a date first')
-                  }
-                }}
-                className="text-xs bg-[#0065BD] text-white px-2 py-1 rounded hover:bg-[#0055a3]"
+                onClick={() => setEditingGradDateModal(true)}
+                className="text-xs bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 font-medium shadow-sm flex items-center gap-1"
               >
-                Apply
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m8 4v10a2 2 0 01-2 2h-4m-4 0H8a2 2 0 01-2-2V7m4 4h8" />
+                </svg>
+                Modify
               </button>
             </div>
           </div>
@@ -909,6 +897,43 @@ const DegreePlanner = () => {
                   </div>
                 )
               })}
+            </div>
+          </div>
+        )}
+
+        {/* Graduation Date Modal */}
+        {editingGradDateModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 w-full max-w-md">
+              <h2 className="text-lg font-semibold mb-4">Set Graduation Date</h2>
+              <input
+                type="date"
+                value={goalDate}
+                onChange={(e) => setGoalDate(e.target.value)}
+                className="w-full text-sm border rounded px-3 py-2 mb-4"
+              />
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setEditingGradDateModal(false)}
+                  className="px-4 py-2 text-sm border rounded hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    const { data: { user } } = await supabase.auth.getUser()
+                    if (user && goalDate) {
+                      const { error } = await supabase.from('users').upsert({ id: user.id, graduation_date: goalDate }, { onConflict: 'id' })
+                      if (!error) {
+                        setEditingGradDateModal(false)
+                      }
+                    }
+                  }}
+                  className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+                >
+                  Apply
+                </button>
+              </div>
             </div>
           </div>
         )}
