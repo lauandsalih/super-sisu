@@ -12,6 +12,9 @@ type Course = {
   language: string
   department: string | null
   prerequisites: string | null
+}
+
+type CourseRealization = {
   learning_outcomes: string | null
   content: string | null
   teaching_language: string | null
@@ -45,20 +48,37 @@ const CoursePage = () => {
   const [courseStatus, setCourseStatus] = useState<string>('planned')
   const [showGradeForm, setShowGradeForm] = useState(false)
   const [selectedGrade, setSelectedGrade] = useState<number | null>(null)
+  const [realization, setRealization] = useState<CourseRealization | null>(null)
   const { toggleFavorite, isFavorite } = useFavorites()
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data } = await supabase
+      const { data: courseData } = await supabase
         .from('courses')
         .select('*')
         .eq('id', id)
         .single()
-      
-      if (data) {
-        setCourse(data)
+
+      if (courseData) {
+        setCourse(courseData)
+        
+        // Fetch course realization for additional info
+        const { data: realData } = await supabase
+          .from('course_realizations')
+          .select('learning_outcomes, content, teaching_language, teaching_period')
+          .eq('course_id', courseData.id)
+          .maybeSingle()
+        
+        if (realData) {
+          setRealization(realData)
+        }
       } else {
         setError(true)
+      }
+
+      if (!courseData) {
+        setLoading(false)
+        return
       }
 
       const { data: reviewsData } = await supabase
@@ -198,17 +218,17 @@ const CoursePage = () => {
             {course.department && <span>{course.department}</span>}
           </div>
 
-          {course.learning_outcomes && (
+          {realization?.learning_outcomes && (
             <div className="mt-6 bg-blue-50 rounded-lg p-4">
               <h3 className="text-base font-semibold text-gray-800 mb-2">Learning outcomes</h3>
-              <p className="text-gray-700 text-sm whitespace-pre-line leading-relaxed">{course.learning_outcomes}</p>
+              <p className="text-gray-700 text-sm whitespace-pre-line leading-relaxed">{realization.learning_outcomes}</p>
             </div>
           )}
 
-          {course.content && (
+          {realization?.content && (
             <div className="mt-4 bg-green-50 rounded-lg p-4">
               <h3 className="text-base font-semibold text-gray-800 mb-2">Content</h3>
-              <p className="text-gray-700 text-sm whitespace-pre-line leading-relaxed">{course.content}</p>
+              <p className="text-gray-700 text-sm whitespace-pre-line leading-relaxed">{realization.content}</p>
             </div>
           )}
 
@@ -225,13 +245,13 @@ const CoursePage = () => {
           <div className="mt-4 bg-purple-50 rounded-lg p-4">
             <h3 className="text-base font-semibold text-gray-800 mb-2">Additional information</h3>
             <div className="text-sm text-gray-700 space-y-1">
-              {course.teaching_language && (
-                <p><span className="font-semibold">Teaching Language:</span> {course.teaching_language}</p>
+              {realization?.teaching_language && (
+                <p><span className="font-semibold">Teaching Language:</span> {realization.teaching_language}</p>
               )}
-              {course.teaching_period && (
-                <p><span className="font-semibold">Teaching Period:</span> {course.teaching_period}</p>
+              {realization?.teaching_period && (
+                <p><span className="font-semibold">Teaching Period:</span> {realization.teaching_period}</p>
               )}
-              {course.period && (
+              {!realization?.teaching_period && course.period && (
                 <p><span className="font-semibold">Teaching Period:</span> {course.period}</p>
               )}
             </div>

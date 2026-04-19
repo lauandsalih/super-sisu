@@ -922,9 +922,14 @@ const DegreePlanner = () => {
                 <button
                   onClick={async () => {
                     const { data: { user } } = await supabase.auth.getUser()
-                    if (user && goalDate) {
-                      const { error } = await supabase.from('users').upsert({ id: user.id, graduation_date: goalDate }, { onConflict: 'id' })
-                      if (!error) {
+                    if (user) {
+                      const { error } = await supabase.from('users').upsert({ 
+                        id: user.id, 
+                        graduation_date: goalDate || null 
+                      }, { onConflict: 'id' })
+                      if (error) {
+                        alert('Error: ' + error.message)
+                      } else {
                         setEditingGradDateModal(false)
                       }
                     }
