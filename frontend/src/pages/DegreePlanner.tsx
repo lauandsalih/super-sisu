@@ -74,6 +74,8 @@ const DegreePlanner = () => {
 
   useEffect(() => {
     const fetchData = async () => {
+      
+      
       const { data: { user } } = await supabase.auth.getUser()
 
       if (user) {
@@ -528,33 +530,30 @@ const DegreePlanner = () => {
       return combinedData
     }
     
-    // Calculate extension values
-    // Find the last actual credits value before planned starts
+    // Find the last actual credits value (endpoint where credit line stops)
     let lastActualCreditsValue = 0
     for (let i = 0; i < firstPlannedIdx; i++) {
-      if (combinedData[i].actualCredits != null) {
+      if (combinedData[i].actualCredits != null && combinedData[i].actualCredits > 0) {
         lastActualCreditsValue = combinedData[i].actualCredits
       }
     }
     
+    // Build cumulative planned credits array
+    let cumulativePlanned = 0
     for (let i = 0; i < combinedData.length; i++) {
       if (i < firstPlannedIdx) {
         // Before first planned: no extension line
         combinedData[i].actualExtension = null as any
-      } else if (i === firstPlannedIdx) {
-        // First planned period: start from last actual credits value
-        combinedData[i].actualExtension = lastActualCreditsValue
-      } else if (i <= lastPlannedIdx) {
-        // Between first and last planned: add cumulatively from the start value
-        const startExtension = combinedData[firstPlannedIdx].actualExtension || lastActualCreditsValue
-        let totalPlannedCredits = 0
-        for (let j = firstPlannedIdx; j <= i; j++) {
-          totalPlannedCredits += combinedData[j].plannedOnlyCredits || 0
-        }
-        combinedData[i].actualExtension = startExtension + totalPlannedCredits
       } else {
-        // After last planned: stop the line (null)
-        combinedData[i].actualExtension = null as any
+        // Add cumulative planned credits from first planned onwards
+        cumulativePlanned += combinedData[i].plannedOnlyCredits || 0
+        if (i <= lastPlannedIdx && cumulativePlanned > 0) {
+          // Extension: starts from last actual credits, adds planned cumulatively
+          combinedData[i].actualExtension = lastActualCreditsValue + cumulativePlanned
+        } else {
+          // After last planned: stop the line
+          combinedData[i].actualExtension = null as any
+        }
       }
     }
 

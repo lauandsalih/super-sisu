@@ -10,10 +10,13 @@ const Home = () => {
   const [magicSent, setMagicSent] = useState(false)
   const [magicError, setMagicError] = useState('')
 
-  useEffect(() => {
+useEffect(() => {
     const getUser = async () => {
+      // ALWAYS use real Supabase auth - session persists in browser
       const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
+      if (user) {
+        setUser(user)
+      }
       setLoading(false)
     }
     getUser()
@@ -26,8 +29,9 @@ const Home = () => {
   }, [])
 
   const handleGoogleLogin = async () => {
-    const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    const redirectUrl = isDev ? 'http://localhost:5173/degree' : `${window.location.origin}/degree`
+const redirectUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+    ? 'http://localhost:5173/degree' 
+    : `${window.location.origin}/degree`
     
     await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -62,6 +66,10 @@ const Home = () => {
   }
 
   const handleSignOut = async () => {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      setUser(null)
+      return
+    }
     await supabase.auth.signOut()
   }
 
@@ -76,8 +84,7 @@ const Home = () => {
   }
 
   // Dev-only: automatic sign-in for localhost
-  const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  if (isDev && !user) {
+  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !user) {
     // Show helpful message for dev
     return (
       <div className="max-w-[1200px] mx-auto px-8 py-12">

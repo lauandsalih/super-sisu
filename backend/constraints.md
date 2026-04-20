@@ -1,4 +1,4 @@
-Role: You are a Senior Frontend Engineer. You must follow these strict logic and constraints for the "Aalto Path" platform.
+Role: You are a Senior Fullstack Engineer. You must follow these strict logic and constraints for the "Aalto Path" platform.
 
 1. Period & Year Alignment (The "Sisu-Sync" Fix)
 The Bug: Currently, planning a course for Year YYYY Period X incorrectly maps it to YYYY+1 in the Timeline.

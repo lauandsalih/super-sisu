@@ -59,6 +59,7 @@ const Profile = () => {
 
   useEffect(() => {
     const getUser = async () => {
+      // ALWAYS use real Supabase auth (session persists in browser)
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
       
@@ -149,6 +150,37 @@ const Profile = () => {
   if (loading) return <div className="p-8 text-gray-400">Loading...</div>
 
   if (!user) {
+    // Dev mode: show dev profile
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return (
+        <div className="min-h-screen bg-gray-50">
+          <div className="max-w-3xl mx-auto px-4 py-12">
+            <a href="/" className="text-blue-600 text-sm mb-6 block">Back to home</a>
+            <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900 mb-1">Dev Profile</h1>
+                  <p className="text-gray-500 text-sm">Enable Admin to test PDF</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+if (sessionStorage.getItem('adminMode')) {
+                      sessionStorage.removeItem('adminMode')
+                    } else {
+                      sessionStorage.setItem('adminMode', 'true')
+                    }
+                  }}
+                  className="text-xs mt-2 px-2 py-1 rounded border"
+                >
+                  {sessionStorage.getItem('adminMode') ? '✓ Admin ON' : 'Admin OFF'}
+                </button>
+            </div>
+          </div>
+        </div>
+      )
+    }
+    
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
         <div className="text-center max-w-md">
@@ -175,6 +207,21 @@ const Profile = () => {
             <div>
               <h1 className="text-2xl font-bold text-gray-900 mb-1">My Profile</h1>
               <p className="text-gray-500 text-sm">{user.email}</p>
+              {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+                <button
+                  onClick={() => {
+                    if (sessionStorage.getItem('adminMode')) {
+                      sessionStorage.removeItem('adminMode')
+                    } else {
+                      sessionStorage.setItem('adminMode', 'true')
+                    }
+                    alert(sessionStorage.getItem('adminMode') ? 'Admin ON - try PDF' : 'Admin OFF')
+                  }}
+                  className="text-xs mt-2 px-2 py-1 rounded border bg-gray-100"
+                >
+                  {sessionStorage.getItem('adminMode') ? '✓ Admin ON' : 'Admin OFF'}
+                </button>
+              )}
             </div>
             <button
               onClick={handleSignOut}
@@ -294,7 +341,7 @@ const Profile = () => {
               id="transcript-upload"
               accept=".pdf"
               className="hidden"
-              onChange={async (e) => {
+onChange={async (e) => {
                 const file = e.target.files?.[0]
                 console.log('File selected:', file, 'User:', user)
                 if (!file || !user) {
@@ -302,25 +349,34 @@ const Profile = () => {
                   return
                 }
                 
+                // Allow PDF upload in production or with real user
+                const isProduction = window.location.origin.includes('vercel.app')
+                const isRealUser = user.id && user.id !== 'dev-user'
+                
+                if (!isProduction && !isRealUser) {
+                  // In dev mode, check localStorage for override
+                  const adminMode = sessionStorage.getItem('adminMode')
+                  if (!adminMode) {
+                    setTranscriptMessage('PDF upload needs Admin ON (click under your email)')
+                    return
+                  }
+                }
+                
                 setUploadingTranscript(true)
                 setTranscriptMessage('')
                 
                 try {
                   const fileName = `${user.id}/${Date.now()}-${file.name}`
-                  console.log('Uploading to:', fileName)
-                  const { data, error: uploadError } = await supabase.storage
+                  const uploadResult = await supabase.storage
                     .from('transcripts')
                     .upload(fileName, file)
                   
-
-                  console.log('Upload result:', { data, error: uploadError })
-                  if (uploadError) {
-                    console.error('Upload error:', uploadError)
-                    setTranscriptMessage(`Upload error: ${uploadError.message}`)
+                  if (uploadResult.error) {
+                    setTranscriptMessage('Upload failed: ' + uploadResult.error.message)
                     setUploadingTranscript(false)
                     return
                   }
-                  
+
                   const { data: { publicUrl } } = supabase.storage
                     .from('transcripts')
                     .getPublicUrl(fileName)
@@ -343,11 +399,29 @@ const Profile = () => {
                     const withGrades = data.gradesExtracted?.filter((g: any) => g.grade !== null).map((g: any) => `${g.code}:${g.grade}`).join(', ') || 'none'
                     setTranscriptMessage(`Imported ${data.imported}/${data.total}. Grades found: ${withGrades}`)
                     
-                    const { data: updatedCourses } = await supabase
-                      .from('user_courses')
-                      .select('*, courses(*)')
-                      .eq('user_id', user.id)
-                    if (updatedCourses) setUserCourses(updatedCourses)
+                    // Save imported courses to localStorage in dev mode, or fetch from Supabase in prod
+                    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                      // Save response data to dev courses
+                      if (data.gradesExtracted) {
+                        const fakeUserCourses = data.gradesExtracted.filter((g: any) => g.grade).map((g: any, i: number) => ({
+                          id: `imported-${i}`,
+                          user_id: user.id,
+                          course_id: g.code,
+                          status: 'completed',
+                          grade: g.grade,
+                          period: g.date || 'N/A',
+                          courses: { id: g.code, code: g.code, name: g.code, credits: 5 }
+                        }))
+                        setUserCourses(fakeUserCourses)
+                        localStorage.setItem('devUserCourses', JSON.stringify(fakeUserCourses))
+                      }
+                    } else {
+                      const { data: updatedCourses } = await supabase
+                        .from('user_courses')
+                        .select('*, courses(*)')
+                        .eq('user_id', user.id)
+                      if (updatedCourses) setUserCourses(updatedCourses)
+                    }
                   } else {
                     setTranscriptMessage('Error extracting grades. Please try again.')
                   }
@@ -386,12 +460,51 @@ const Profile = () => {
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-gray-900">My Courses</h2>
-            <button
-              onClick={() => setShowAddCourseModal(true)}
-              className="text-sm px-3 py-1 rounded bg-[#0065BD] text-white hover:bg-[#0055a3]"
-            >
-              + Add Course
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  const data = JSON.stringify(userCourses, null, 2)
+                  const blob = new Blob([data], { type: 'application/json' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = 'my-courses-backup.json'
+                  a.click()
+                }}
+                className="text-sm px-3 py-1 rounded border text-gray-600 hover:bg-gray-50"
+              >
+                Export
+              </button>
+              <label className="text-sm px-3 py-1 rounded border text-gray-600 hover:bg-gray-50 cursor-pointer">
+                Import
+                <input
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const reader = new FileReader()
+                    reader.onload = (event) => {
+                      try {
+                        const imported = JSON.parse(event.target?.result as string)
+                        setUserCourses(imported)
+                        localStorage.setItem('devUserCourses', JSON.stringify(imported))
+                      } catch {
+                        alert('Invalid file')
+                      }
+                    }
+                    reader.readAsText(file)
+                  }}
+                />
+              </label>
+              <button
+                onClick={() => setShowAddCourseModal(true)}
+                className="text-sm px-3 py-1 rounded bg-[#0065BD] text-white hover:bg-[#0055a3]"
+              >
+                + Add Course
+              </button>
+            </div>
             <div className="flex gap-2">
               {userCourses.length > 0 && (
                 <>

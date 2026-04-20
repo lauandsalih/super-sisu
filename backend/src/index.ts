@@ -25,19 +25,25 @@ app.get('/', async (req, res) => {
 
 app.post('/api/extract-grades', async (req, res) => {
   try {
-    const { pdfUrl, userId } = req.body
-    console.log('Extract grades request:', { pdfUrl, userId })
+    const { pdfUrl, userId, pdfBase64, fileName } = req.body
+    console.log('Extract grades request:', { pdfUrl, userId, hasBase64: !!pdfBase64 })
     
-    if (!pdfUrl || !userId) {
-      return res.status(400).json({ error: 'Missing pdfUrl or userId' })
-    }
+    let pdfBuffer: Buffer
     
-    const response = await fetch(pdfUrl)
-    if (!response.ok) {
-      return res.status(400).json({ error: 'Failed to fetch PDF' })
+    if (pdfBase64) {
+      // Direct base64 PDF (no storage needed)
+      pdfBuffer = Buffer.from(pdfBase64, 'base64')
+    } else if (pdfUrl && userId) {
+      // URL-based PDF (requires storage)
+      const response = await fetch(pdfUrl)
+      if (!response.ok) {
+        return res.status(400).json({ error: 'Failed to fetch PDF' })
+      }
+      const arrayBuffer = await response.arrayBuffer()
+      pdfBuffer = Buffer.from(arrayBuffer)
+    } else {
+      return res.status(400).json({ error: 'Missing pdfUrl or pdfBase64 and userId' })
     }
-    const arrayBuffer = await response.arrayBuffer()
-    const pdfBuffer = Buffer.from(arrayBuffer)
     
     const pdfData = await pdfParse(pdfBuffer)
     const pdfText = pdfData.text
