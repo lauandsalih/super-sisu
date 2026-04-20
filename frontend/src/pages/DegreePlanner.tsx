@@ -327,14 +327,22 @@ const DegreePlanner = () => {
       ? allPeriods
       : allPeriods.filter((p) => getSortKey(p.year, p.period) <= timelineEndKey!)
     
-    // Build semester map from courses
-    const semesterMap: Record<string, SemesterData> = {}
+// Build semester map from courses
+  const semesterMap: Record<string, SemesterData> = {}
+  console.log('Completed course periods:', completedCourses.map(c => c.period))
+  
+  for (const course of completedCourses) {
+    let parsed = parsePeriod(course.period)
+    if (!parsed) {
+      // Use current period as default for courses without period data
+      const now = new Date()
+      const currentYear = now.getFullYear()
+      const month = now.getMonth()
+      let currentPeriod = month >= 8 && month <= 9 ? 1 : month >= 10 && month <= 11 ? 2 : month >= 0 && month <= 1 ? 3 : month >= 2 && month <= 4 ? 4 : month >= 5 && month <= 7 ? 5 : 0
+      parsed = { year: currentYear, period: currentPeriod, name: `${currentYear} ${currentPeriod === 0 ? 'Summer' : toRoman(currentPeriod)}` }
+    }
     
-    for (const course of completedCourses) {
-      const parsed = parsePeriod(course.period)
-      if (!parsed) continue
-      
-      const key = `${parsed.year}-${parsed.period}`
+    const key = `${parsed.year}-${parsed.period}`
       if (!semesterMap[key]) {
         semesterMap[key] = {
           name: parsed.name,
