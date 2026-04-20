@@ -397,6 +397,8 @@ const DegreePlanner = () => {
       // Count ALL completed credits (regardless of period end date)
       cumulativeCredits += sem.completed
       sem.cumulative = cumulativeCredits
+    })
+    console.log('TOTAL CUMULATIVE:', cumulativeCredits, 'completed courses:', completedCourses.length)
       
       // Cumulative with planned extends along planned-course timeline.
       cumulativePlannedCredits += sem.planned
