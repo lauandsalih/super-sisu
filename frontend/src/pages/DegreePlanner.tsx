@@ -394,10 +394,8 @@ const DegreePlanner = () => {
     let cumulativePlannedCredits = 0
     
     sortedSemesters.forEach((sem) => {
-      // Only count credits if period has ended - use completed only, not planned
-      if (isPeriodEnded(sem.year, sem.period)) {
-        cumulativeCredits += sem.completed
-      }
+      // Count ALL completed credits (regardless of period end date)
+      cumulativeCredits += sem.completed
       sem.cumulative = cumulativeCredits
       
       // Cumulative with planned extends along planned-course timeline.
@@ -514,13 +512,12 @@ const DegreePlanner = () => {
     const lastPlannedIdx = combinedData.findLastIndex(d => d.plannedOnlyCredits && d.plannedOnlyCredits > 0)
     
     // Find period that is currently happening (hasn't ended yet) and stop actual line there
-    // The actual progress shows up to current period (including it)
-    const activePeriodIdx = combinedData.findIndex(d => d.isCurrentOrFuture)
-    const lastCompletedIdxForActual = activePeriodIdx >= 0 ? activePeriodIdx - 1 : combinedData.length - 1
+    // Find the last period with actual credits - stop line there
+    const lastActualIdx = combinedData.findLastIndex(d => d.actualCredits != null && d.actualCredits > 0)
     
-    // Set all actual values beyond last completed to null (stop the line at current period)
+    // Set all actual values beyond last completed to null (stop the line)
     for (let i = 0; i < combinedData.length; i++) {
-      if (i > lastCompletedIdxForActual) {
+      if (i > lastActualIdx) {
         combinedData[i].actualCredits = null as any
       }
     }
