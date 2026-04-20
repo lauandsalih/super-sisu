@@ -511,31 +511,25 @@ const DegreePlanner = () => {
     const firstPlannedIdx = combinedData.findIndex(d => d.plannedOnlyCredits && d.plannedOnlyCredits > 0)
     const lastPlannedIdx = combinedData.findLastIndex(d => d.plannedOnlyCredits && d.plannedOnlyCredits > 0)
     
-    // Find period that is currently happening (hasn't ended yet) and stop actual line there
-    // Find the last period with actual credits - stop line there
+    // Find the last index with actual credits (non-null, > 0)
     const lastActualIdx = combinedData.findLastIndex(d => d.actualCredits != null && d.actualCredits > 0)
     
-    // Set all actual values beyond last completed to null (stop the line)
+    // Stop actual line at last actual credits
     for (let i = 0; i < combinedData.length; i++) {
-      if (i > lastActualIdx) {
+      if (i > lastActualIdx && lastActualIdx >= 0) {
         combinedData[i].actualCredits = null as any
       }
     }
+    
+    // Get the actual credits value at last actual index
+    const lastActualCreditsValue = lastActualIdx >= 0 ? combinedData[lastActualIdx].actualCredits : 0
     
     // If no planned, return as-is
     if (firstPlannedIdx === -1) {
       return combinedData
     }
     
-    // Find the last actual credits value (endpoint where credit line stops)
-    let lastActualCreditsValue = 0
-    for (let i = 0; i < firstPlannedIdx; i++) {
-      if (combinedData[i].actualCredits != null && combinedData[i].actualCredits > 0) {
-        lastActualCreditsValue = combinedData[i].actualCredits
-      }
-    }
-    
-    // Build cumulative planned credits array
+    // Build cumulative planned credits - extension starts from last actual credits value
     let cumulativePlanned = 0
     for (let i = 0; i < combinedData.length; i++) {
       if (i < firstPlannedIdx) {
