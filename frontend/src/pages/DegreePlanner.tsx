@@ -399,11 +399,11 @@ const DegreePlanner = () => {
       sem.cumulative = cumulativeCredits
     })
     console.log('TOTAL CUMULATIVE:', cumulativeCredits, 'completed courses:', completedCourses.length)
-      
-      // Cumulative with planned extends along planned-course timeline.
-      cumulativePlannedCredits += sem.planned
-      sem.cumulativeWithPlanned = cumulativeCredits + cumulativePlannedCredits
-    })
+    
+    // Cumulative with planned extends along planned-course timeline.
+    cumulativePlannedCredits += sem.planned
+    sem.cumulativeWithPlanned = cumulativeCredits + cumulativePlannedCredits
+  })
     
     // Build cumulative GPA timeline including:
     // - completed courses (with what-if grade overrides)
