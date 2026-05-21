@@ -47,7 +47,6 @@ app.post('/api/extract-grades', async (req, res) => {
     
     const pdfData = await pdfParse(pdfBuffer)
     const pdfText = pdfData.text
-    console.log('RAW PDF TEXT:\n', pdfText.substring(0, 5000))
 
     const courses = extractCoursesFromText(pdfText)
     console.log('Extracted courses:', courses.length, JSON.stringify(courses))
@@ -155,114 +154,79 @@ app.post('/api/extract-grades', async (req, res) => {
 function extractCoursesFromText(text: string) {
   const courses: { courseCode: string; grade: number | null; credits: number; completionDate?: string }[] = []
   const addedCodes = new Set<string>()
-  
-  // Match: (CODE) ... X cr ... grade
-  const codePattern = /\(([A-Z]{2,4}-[A-Z0-9]+\d*)\)/gi
-  let codeMatch
-  while ((codeMatch = codePattern.exec(text)) !== null) {
-    const courseCode = codeMatch[1].toUpperCase()
-    if (addedCodes.has(courseCode)) continue
-    
-    // Find the line containing this code
-    const codeIndex = codeMatch.index
-    const lineStart = text.lastIndexOf('\n', codeIndex) + 1
-    const lineEnd = text.indexOf('\n', codeIndex)
-    const line = text.substring(lineStart, lineEnd > 0 ? lineEnd : text.length)
-    
-    const lineTrimmed = line.trim()
-    
-    // Extract credits - try multiple patterns
-    // "5 cr", "5cr", "10 cr", "4cr", "cr 5", "CR 5" etc.
-    let credits = 0
-    let creditsMatch = lineTrimmed.match(/(\d+)\s*cr/i)
-    if (creditsMatch) {
-      credits = parseInt(creditsMatch[1], 10)
+
+  // Aalto course code formats:
+  // - Letter-prefix with dash:  MS-A0101, CS-A1111, ECON-C5000, MNGT-A4004, BIZ-A0103, ABL-A1300
+  // - Numeric-prefix no dash:   31C02100, 30A02000, 32A00130, 28A00110
+  // All appear inside parentheses in the transcript: (CODE) or (CODE\nCODE_CONTINUED)
+  const CODE_RE = /\(([A-Z]{2,6}-[A-Z]\d{3,}[A-Z0-9]*|[0-9]{2}[A-Z][0-9]{5,})\)/gi
+
+  // Normalize text: collapse lines that are continuations of a wrapped course entry.
+  // A continuation line has no opening parenthesis and no "X cr" pattern — it's just
+  // the rest of a long course name. We join it onto the previous line.
+  const rawLines = text.split('\n')
+  const lines: string[] = []
+  for (const raw of rawLines) {
+    const t = raw.trim()
+    if (!t) { lines.push(''); continue }
+    // If this line looks like it belongs to the previous line (no code, no "X cr" at start,
+    // but previous line has an unclosed course entry), append it.
+    const prevLine = lines[lines.length - 1] || ''
+    const prevHasCode = CODE_RE.test(prevLine)
+    CODE_RE.lastIndex = 0
+    const prevHasCr = /\d+\s*cr\b/i.test(prevLine)
+    const thisHasCode = CODE_RE.test(t)
+    CODE_RE.lastIndex = 0
+    const thisStartsWithCode = /^\([A-Z0-9]/.test(t)
+
+    if (prevHasCode && !prevHasCr && !thisHasCode && !thisStartsWithCode && lines.length > 0) {
+      lines[lines.length - 1] = prevLine + ' ' + t
     } else {
-      creditsMatch = lineTrimmed.match(/cr\s+(\d+)/i)
-      if (creditsMatch) credits = parseInt(creditsMatch[1], 10)
+      lines.push(t)
     }
-    // Debug: uncomment to see each line
-    // console.log('Line:', lineTrimmed, '| credits found:', credits)
-
-    let grade: number | null = null
-    let completionDate: string | null = null
-    
-    // Pattern: "X cr en 2 19 Feb 2026" - grade is number (e.g., "5 cr en 2 19 Feb 2026")
-    let gradeMatch = lineTrimmed.match(/(\d+)\s*cr\s+([a-z]{2})\s+(\d+)\s+(\d+)\s+([A-Za-z]+)\s+(\d{4})/i)
-    if (gradeMatch) {
-      grade = parseInt(gradeMatch[3], 10)
-      completionDate = gradeMatch[4] + ' ' + gradeMatch[5] + ' ' + gradeMatch[6]
-    }
-
-    // Pattern: "X cr en Pass 15 Feb 2026" - grade is "Pass" (e.g., "2 cr en Pass 15 Feb 2026")
-    if (!gradeMatch || grade === null) {
-      gradeMatch = lineTrimmed.match(/(\d+)\s*cr\s+([a-z]{2})\s+Pass\s+(\d+)\s+([A-Za-z]+)\s+(\d{4})/i)
-      if (gradeMatch) {
-        grade = null  // Pass = null in database
-        completionDate = gradeMatch[3] + ' ' + gradeMatch[4] + ' ' + gradeMatch[5]
-      }
-    }
-
-    // Fallback: Try to find any date with Pass
-    if (!completionDate && lineTrimmed.toLowerCase().includes('pass')) {
-      const passDateMatch = lineTrimmed.match(/Pass\s+(\d+)\s+([A-Za-z]+)\s+(\d{4})/i)
-      if (passDateMatch) {
-        grade = null
-        completionDate = passDateMatch[1] + ' ' + passDateMatch[2] + ' ' + passDateMatch[3]
-      }
-    }
-    
-    // Pattern 2: "X cr [lang] [grade] [date]" - with spaces
-    if (!gradeMatch) {
-      gradeMatch = lineTrimmed.match(/(\d+)\s*cr\s+([a-z]{2})\s+(\d)\s+(\d+)\s+([A-Za-z]+\s+\d{4})/i)
-      if (gradeMatch) {
-        const gradeStr = gradeMatch[3]
-        const parsed = parseInt(gradeStr, 10)
-        grade = (!isNaN(parsed) && parsed >= 0 && parsed <= 5) ? parsed : null
-        completionDate = gradeMatch[4] + ' ' + gradeMatch[5]
-      }
-    }
-    
-    // Pattern 3: Pass with spaces "2 cr en Pass 15 Feb 2026"
-    if (!gradeMatch) {
-      gradeMatch = lineTrimmed.match(/(\d+)\s*cr\s+([a-z]{2})\s+Pass\s+(\d+)\s+([A-Za-z]+\s+\d{4})/i)
-      if (gradeMatch) {
-        grade = null
-        completionDate = gradeMatch[3] + ' ' + gradeMatch[4]
-      }
-    }
-    
-    // Pattern 4: Pass no spaces "2 cr enPass15 Feb 2026"
-    if (!gradeMatch) {
-      gradeMatch = lineTrimmed.match(/(\d+)\s*cr\s+([a-z]{2})Pass(\d+)\s+([A-Za-z]+\s+\d{4})/i)
-      if (gradeMatch) {
-        grade = null
-        completionDate = gradeMatch[3] + ' ' + gradeMatch[4]
-      }
-    }
-
-    // Pattern 5: Pass with month-day-year format "2 cr en Pass Feb 15, 2026" or "Feb 15 2026"
-    if (!gradeMatch) {
-      gradeMatch = lineTrimmed.match(/(\d+)\s*cr\s+([a-z]{2})\s+Pass\s+([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/i)
-      if (gradeMatch) {
-        grade = null
-        completionDate = gradeMatch[4] + ' ' + gradeMatch[3] + ' ' + gradeMatch[5]
-      }
-    }
-
-    // Pattern 6: Try to find any date after "Pass" as fallback
-    if (!gradeMatch && lineTrimmed.toLowerCase().includes('pass')) {
-      const passDateMatch = lineTrimmed.match(/Pass\s+(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/i)
-      if (passDateMatch) {
-        grade = null
-        completionDate = passDateMatch[1] + ' ' + passDateMatch[2] + ' ' + passDateMatch[3]
-      }
-    }
-    
-    courses.push({ courseCode, grade, credits, completionDate: completionDate || undefined })
-    addedCodes.add(courseCode)
   }
-  
+
+  for (const line of lines) {
+    CODE_RE.lastIndex = 0
+    let m: RegExpExecArray | null
+    while ((m = CODE_RE.exec(line)) !== null) {
+      const courseCode = m[1].toUpperCase()
+      if (addedCodes.has(courseCode)) continue
+
+      // Extract the part of the line after the closing paren of the code
+      const afterCode = line.substring(m.index + m[0].length).trim()
+
+      // Credits: first "N cr" anywhere in the remaining text
+      let credits = 0
+      const crMatch = afterCode.match(/(\d+)\s*cr\b/i)
+      if (crMatch) credits = parseInt(crMatch[1], 10)
+
+      let grade: number | null = null
+      let completionDate: string | null = null
+
+      // Format after code: "Xcr lang grade date" or "Xcr lang Pass date"
+      // Date format: "7 Apr 2026" or "19 May 2025"
+      // Numeric grade: "Xcr en 3 7 Apr 2026"
+      const numGrade = afterCode.match(/\d+\s*cr\s+(?:en|fi|sv)\s+([1-5])\s+(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/i)
+      if (numGrade) {
+        grade = parseInt(numGrade[1], 10)
+        completionDate = `${numGrade[2]} ${numGrade[3]} ${numGrade[4]}`
+      }
+
+      if (!completionDate) {
+        // Pass grade: "Xcr en Pass 7 Apr 2026"
+        const passGrade = afterCode.match(/\d+\s*cr\s+(?:en|fi|sv)\s+Pass\s+(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/i)
+        if (passGrade) {
+          grade = null
+          completionDate = `${passGrade[1]} ${passGrade[2]} ${passGrade[3]}`
+        }
+      }
+
+      courses.push({ courseCode, grade, credits, completionDate: completionDate || undefined })
+      addedCodes.add(courseCode)
+    }
+  }
+
   console.log('Parsed courses:', courses)
   return courses
 }
