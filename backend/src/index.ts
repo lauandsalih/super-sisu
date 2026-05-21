@@ -56,116 +56,85 @@ app.post('/api/extract-grades', async (req, res) => {
     let failed: string[] = []
     
     console.log('All courses found:', courses.map(c => c.courseCode))
-    
-    for (const course of courses) {
-      if (!course.courseCode) continue
-      
-      const cleanCode = course.courseCode.replace(/[.\s-]/g, '').toUpperCase()
-      console.log('Processing:', course.courseCode, '-> clean:', cleanCode)
-      
-      // First try exact match
-      let { data: matchingCourse } = await supabase
+
+    const validCourses = courses.filter(c => c.courseCode)
+    const courseCodes = validCourses.map(c => c.courseCode)
+
+    // Single query to fetch all matching courses at once
+    const { data: catalogCourses } = await supabase
+      .from('courses')
+      .select('id, code')
+      .in('code', courseCodes)
+
+    const catalogMap = new Map((catalogCourses || []).map(c => [c.code, c.id]))
+
+    // Find unmatched codes and try fuzzy match in one query
+    const unmatched = validCourses.filter(c => !catalogMap.has(c.courseCode))
+    if (unmatched.length > 0) {
+      const cleanCodes = unmatched.map(c => c.courseCode.replace(/[.\s-]/g, '').toUpperCase())
+      const orFilter = cleanCodes.map(code => `code.ilike.%${code}%`).join(',')
+      const { data: fuzzyMatches } = await supabase
         .from('courses')
         .select('id, code')
-        .eq('code', course.courseCode)
-        .single()
-      
-      // If no exact match, try fuzzy match
-      if (!matchingCourse) {
-        const { data: fuzzyMatches } = await supabase
-          .from('courses')
-          .select('id, code')
-          .or(`code.ilike.%${cleanCode}%,code.ilike.%${course.courseCode}%`)
-        
-        if (fuzzyMatches && fuzzyMatches.length > 0) {
-          matchingCourse = fuzzyMatches[0]
-        }
-      }
-      
-      console.log('Match result:', matchingCourse ? matchingCourse.id : 'not found')
-      
-      if (matchingCourse) {
-        const academicPeriod = mapDateToPeriod(course.completionDate || null)
-        const { error: upsertError } = await supabase
-          .from('user_courses')
-          .upsert({
-            user_id: userId,
-            course_id: matchingCourse.id,
-            status: 'completed',
-            grade: course.grade,
-            period: academicPeriod
-          }, { onConflict: 'user_id,course_id,status' })
-        
-        if (upsertError) {
-          console.error('Upsert error:', upsertError)
-          failed.push(course.courseCode)
-        } else {
-          imported++
-        }
-      } else {
-        console.log('No match found for:', course.courseCode, '- creating legacy')
-        
-        try {
-          // Check if course already exists (maybe from previous import)
-          const { data: existingCourse } = await supabase
-            .from('courses')
-            .select('id')
-            .eq('code', course.courseCode)
-            .single()
-          
-          if (existingCourse) {
-            // Use existing course
-            const academicPeriod = mapDateToPeriod(course.completionDate || null)
-            await supabase
-              .from('user_courses')
-              .upsert({
-                user_id: userId,
-                course_id: existingCourse.id,
-                status: 'completed',
-                grade: course.grade,
-                period: academicPeriod
-              }, { onConflict: 'user_id,course_id,status' })
-            imported++
-          } else {
-            // Insert new legacy course
-            const { data: insertData, error: insertError } = await supabase
-              .from('courses')
-              .insert({
-                code: course.courseCode,
-                name: `${course.courseCode} (Imported from transcript)`,
-                credits: course.credits || 5,
-                language: 'Unknown',
-                department: 'LEGACY'
-              })
-              .select('id')
-              .maybeSingle()
-            
-            if (insertData && insertData.id) {
-              const academicPeriod = mapDateToPeriod(course.completionDate || null)
-              await supabase
-                .from('user_courses')
-                .upsert({
-                  user_id: userId,
-                  course_id: insertData.id,
-                  status: 'completed',
-                  grade: course.grade,
-                  period: academicPeriod
-                }, { onConflict: 'user_id,course_id,status' })
-              legacy++
-              imported++
-            } else {
-              console.log('Insert returned no data, error:', insertError)
-              failed.push(course.courseCode)
-            }
-          }
-        } catch (e) {
-          console.log('Exception creating legacy:', e)
-          failed.push(course.courseCode)
+        .or(orFilter)
+      if (fuzzyMatches) {
+        for (const fm of fuzzyMatches) {
+          const match = unmatched.find(c => {
+            const clean = c.courseCode.replace(/[.\s-]/g, '').toUpperCase()
+            return fm.code.replace(/[.\s-]/g, '').toUpperCase().includes(clean) || clean.includes(fm.code.replace(/[.\s-]/g, '').toUpperCase())
+          })
+          if (match && !catalogMap.has(match.courseCode)) catalogMap.set(match.courseCode, fm.id)
         }
       }
     }
+
+    // Create legacy courses for anything still unmatched
+    const stillUnmatched = validCourses.filter(c => !catalogMap.has(c.courseCode))
+    if (stillUnmatched.length > 0) {
+      const { data: inserted } = await supabase
+        .from('courses')
+        .upsert(
+          stillUnmatched.map(c => ({
+            code: c.courseCode,
+            name: `Legacy: ${c.courseCode}`,
+            credits: c.credits || 5,
+            language: 'Unknown',
+            department: 'LEGACY'
+          })),
+          { onConflict: 'code' }
+        )
+        .select('id, code')
+      if (inserted) {
+        for (const row of inserted) catalogMap.set(row.code, row.id)
+        legacy += inserted.length
+      }
+    }
+
+    // Batch upsert all user_courses in one request
+    const upsertRows = validCourses
+      .filter(c => catalogMap.has(c.courseCode))
+      .map(c => ({
+        user_id: userId,
+        course_id: catalogMap.get(c.courseCode)!,
+        status: 'completed',
+        grade: c.grade,
+        period: mapDateToPeriod(c.completionDate || null)
+      }))
+
+    failed = validCourses.filter(c => !catalogMap.has(c.courseCode)).map(c => c.courseCode)
+
+    if (upsertRows.length > 0) {
+      const { error: batchError } = await supabase
+        .from('user_courses')
+        .upsert(upsertRows, { onConflict: 'user_id,course_id,status' })
+      if (batchError) {
+        console.error('Batch upsert error:', batchError)
+      } else {
+        imported = upsertRows.length
+      }
+    }
     
-    console.log('Final response:', { imported, legacy, total: courses.length, gradesExtracted: courses.map(c => ({ code: c.courseCode, grade: c.grade, date: c.completionDate })) })
+    console.log('Final response:', { imported, legacy, total: courses.length, allCourses: courses.map(c => ({ code: c.courseCode, grade: c.grade, date: c.completionDate, credits: c.credits })) })
     
     // Delete the uploaded PDF after extraction for privacy
     try {
@@ -175,7 +144,7 @@ app.post('/api/extract-grades', async (req, res) => {
       console.log('PDF cleanup warning:', deleteErr)
     }
     
-    res.json({ success: true, imported, legacy, total: courses.length, failedCourses: failed, gradesExtracted: courses.map(c => ({ code: c.courseCode, grade: c.grade, date: c.completionDate })), note: legacy > 0 ? `${legacy} course(s) marked as legacy (not found in Aalto catalog)` : undefined })
+    res.json({ success: true, imported, legacy, total: courses.length, failedCourses: failed, gradesExtracted: courses.map(c => ({ code: c.courseCode, grade: c.grade, date: c.completionDate, credits: c.credits })), note: legacy > 0 ? `${legacy} course(s) marked as legacy (not found in Aalto catalog)` : undefined })
   } catch (error) {
     console.error('Extract grades error:', error)
     res.status(500).json({ error: 'Failed to extract grades' })
@@ -199,25 +168,47 @@ function extractCoursesFromText(text: string) {
     const lineEnd = text.indexOf('\n', codeIndex)
     const line = text.substring(lineStart, lineEnd > 0 ? lineEnd : text.length)
     
-    // Extract credits from line - look for number before "cr"
-    const creditsMatch = line.match(/(\d+)\s*cr/i)
-    const credits = creditsMatch ? parseInt(creditsMatch[1], 10) : 5
-    
     const lineTrimmed = line.trim()
     
-    // Format from PDF: "5 cren219 Feb 2026" (no spaces) or "5 cr fi 2 19 Feb 2026" (with spaces)
+    // Extract credits - try multiple patterns
+    // "5 cr", "5cr", "10 cr", "4cr", "cr 5", "CR 5" etc.
+    let credits = 0
+    let creditsMatch = lineTrimmed.match(/(\d+)\s*cr/i)
+    if (creditsMatch) {
+      credits = parseInt(creditsMatch[1], 10)
+    } else {
+      creditsMatch = lineTrimmed.match(/cr\s+(\d+)/i)
+      if (creditsMatch) credits = parseInt(creditsMatch[1], 10)
+    }
+    // Debug: uncomment to see each line
+    // console.log('Line:', lineTrimmed, '| credits found:', credits)
+
     let grade: number | null = null
     let completionDate: string | null = null
     
-    // Pattern 1: "X cr[lang][grade][date] dateText" - e.g., "5 cren219 Feb 2026"
-    // Language is 2 letters (fi/en), grade is single digit, date is digits
-    let gradeMatch = lineTrimmed.match(/(\d+)\s*cr([a-z]{2})(\d)(\d+)\s+([A-Za-z]+\s+\d{4})/i)
-    
+    // Pattern: "X cr en 2 19 Feb 2026" - grade is number (e.g., "5 cr en 2 19 Feb 2026")
+    let gradeMatch = lineTrimmed.match(/(\d+)\s*cr\s+([a-z]{2})\s+(\d+)\s+(\d+)\s+([A-Za-z]+)\s+(\d{4})/i)
     if (gradeMatch) {
-      const gradeStr = gradeMatch[3]
-      const parsed = parseInt(gradeStr, 10)
-      grade = (!isNaN(parsed) && parsed >= 0 && parsed <= 5) ? parsed : null
-      completionDate = gradeMatch[4] + ' ' + gradeMatch[5]
+      grade = parseInt(gradeMatch[3], 10)
+      completionDate = gradeMatch[4] + ' ' + gradeMatch[5] + ' ' + gradeMatch[6]
+    }
+
+    // Pattern: "X cr en Pass 15 Feb 2026" - grade is "Pass" (e.g., "2 cr en Pass 15 Feb 2026")
+    if (!gradeMatch || grade === null) {
+      gradeMatch = lineTrimmed.match(/(\d+)\s*cr\s+([a-z]{2})\s+Pass\s+(\d+)\s+([A-Za-z]+)\s+(\d{4})/i)
+      if (gradeMatch) {
+        grade = null  // Pass = null in database
+        completionDate = gradeMatch[3] + ' ' + gradeMatch[4] + ' ' + gradeMatch[5]
+      }
+    }
+
+    // Fallback: Try to find any date with Pass
+    if (!completionDate && lineTrimmed.toLowerCase().includes('pass')) {
+      const passDateMatch = lineTrimmed.match(/Pass\s+(\d+)\s+([A-Za-z]+)\s+(\d{4})/i)
+      if (passDateMatch) {
+        grade = null
+        completionDate = passDateMatch[1] + ' ' + passDateMatch[2] + ' ' + passDateMatch[3]
+      }
     }
     
     // Pattern 2: "X cr [lang] [grade] [date]" - with spaces
@@ -248,8 +239,24 @@ function extractCoursesFromText(text: string) {
         completionDate = gradeMatch[3] + ' ' + gradeMatch[4]
       }
     }
-    
-    console.log('Line:', lineTrimmed.substring(0, 50), '-> grade:', grade, 'date:', completionDate)
+
+    // Pattern 5: Pass with month-day-year format "2 cr en Pass Feb 15, 2026" or "Feb 15 2026"
+    if (!gradeMatch) {
+      gradeMatch = lineTrimmed.match(/(\d+)\s*cr\s+([a-z]{2})\s+Pass\s+([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/i)
+      if (gradeMatch) {
+        grade = null
+        completionDate = gradeMatch[4] + ' ' + gradeMatch[3] + ' ' + gradeMatch[5]
+      }
+    }
+
+    // Pattern 6: Try to find any date after "Pass" as fallback
+    if (!gradeMatch && lineTrimmed.toLowerCase().includes('pass')) {
+      const passDateMatch = lineTrimmed.match(/Pass\s+(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/i)
+      if (passDateMatch) {
+        grade = null
+        completionDate = passDateMatch[1] + ' ' + passDateMatch[2] + ' ' + passDateMatch[3]
+      }
+    }
     
     courses.push({ courseCode, grade, credits, completionDate: completionDate || undefined })
     addedCodes.add(courseCode)

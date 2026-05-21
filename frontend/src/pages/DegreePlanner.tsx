@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../supabase'
 import { Link } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend, ReferenceDot } from 'recharts'
@@ -26,7 +26,8 @@ type SemesterData = {
   planned: number
   cumulative: number
   cumulativeWithPlanned: number
-  gpa: number
+  actualGpa: number
+  projectedGpa: number
 }
 
 type ChartDataPoint = {
@@ -39,8 +40,9 @@ type ChartDataPoint = {
   idealCredits?: number
   ideal?: number
   plannedCredits: number
-  plannedOnlyCredits?: number  // Per-period only
-  gpa: number
+  plannedOnlyCredits?: number
+  actualGpa: number
+  projectedGpa: number
   period: number
   isCurrentOrFuture: boolean
 }
@@ -54,9 +56,12 @@ const DegreePlanner = () => {
   const [targetGPA, setTargetGPA] = useState(4.0)
   const [goalDate, setGoalDate] = useState('')
   const [addCourseModal, setAddCourseModal] = useState(false)
-  const [selectedCourse, setSelectedCourse] = useState<any>(null)
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([])
-  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [addModalPeriod, setAddModalPeriod] = useState<string>('')
+  const [addModalCourses, setAddModalCourses] = useState<any[]>([])
+  const [addModalSearch, setAddModalSearch] = useState<string>('')
+  const [addModalSearchResults, setAddModalSearchResults] = useState<any[]>([])
+  const [addModalSaving, setAddModalSaving] = useState(false)
   const [editingPeriodModal, setEditingPeriodModal] = useState(false)
   const [editingPeriodCourse, setEditingPeriodCourse] = useState<any>(null)
   const [editingPeriodRowId, setEditingPeriodRowId] = useState<string>('')
@@ -65,12 +70,36 @@ const DegreePlanner = () => {
   const [includePlanned, setIncludePlanned] = useState(false)
   const [editingGradDateModal, setEditingGradDateModal] = useState(false)
 
-  const PLAN_PERIOD_OPTIONS = [
-    '2023-2024 I', '2023-2024 II', '2023-2024 III', '2023-2024 IV', '2023-2024 V', '2023-2024 Summer',
-    '2024-2025 I', '2024-2025 II', '2024-2025 III', '2024-2025 IV', '2024-2025 V', '2024-2025 Summer',
-    '2025-2026 I', '2025-2026 II', '2025-2026 III', '2025-2026 IV', '2025-2026 V', '2025-2026 Summer',
-    '2026-2027 I', '2026-2027 II', '2026-2027 III', '2026-2027 IV', '2026-2027 V', '2026-2027 Summer'
-  ]
+  // Generate periods dynamically: previous + current + 15 future
+  const PLAN_PERIOD_OPTIONS = (() => {
+    const periodOrder = [
+      { label: 'I', num: 1 }, { label: 'II', num: 2 }, { label: 'III', num: 3 },
+      { label: 'IV', num: 4 }, { label: 'V', num: 5 }, { label: 'Summer', num: 0 }
+    ]
+    // Build a flat list of all periods from 2023 onwards, sorted chronologically
+    const all: { str: string; year: number; period: number }[] = []
+    for (let year = 2023; year <= 2031; year++) {
+      for (const p of periodOrder) {
+        all.push({ str: `${year}-${year + 1} ${p.label}`, year, period: p.num })
+      }
+    }
+    // Find the current period index
+    const now = new Date()
+    const month = now.getMonth() + 1
+    const calYear = now.getFullYear()
+    let curYear = calYear, curPeriod = 1
+    if (month >= 9 && month <= 10) { curYear = calYear; curPeriod = 1 }
+    else if (month >= 11 && month <= 12) { curYear = calYear; curPeriod = 2 }
+    else if (month >= 1 && month <= 2) { curYear = calYear - 1; curPeriod = 3 }
+    else if (month >= 3 && month <= 4) { curYear = calYear - 1; curPeriod = 4 }
+    else if (month >= 5 && month <= 6) { curYear = calYear - 1; curPeriod = 5 }
+    else { curYear = calYear - 1; curPeriod = 0 }
+
+    const curIdx = all.findIndex(p => p.year === curYear && p.period === curPeriod)
+    const start = Math.max(0, curIdx - 1)   // 1 previous period
+    const end = Math.min(all.length, curIdx + 16) // current + 15 future
+    return all.slice(start, end).map(p => p.str)
+  })()
 
   useEffect(() => {
     const fetchData = async () => {
@@ -105,6 +134,21 @@ const DegreePlanner = () => {
           setGoalDate(userData.data.graduation_date)
         } else if (userData.data) {
           setGoalDate(userData.data.graduation_date || '')
+        }
+      } else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        const savedDevCourses = localStorage.getItem('devUserCourses')
+        if (savedDevCourses) {
+          try {
+            const devCourses = JSON.parse(savedDevCourses)
+            const completed = devCourses.filter((uc: any) => uc.status === 'completed')
+            const current = devCourses.filter((uc: any) => uc.status === 'current')
+            const planned = devCourses.filter((uc: any) => uc.status === 'planned')
+            setCompletedCourses(completed)
+            setCurrentCourses(current)
+            setPlannedCourses(planned)
+          } catch (e) {
+            console.log('Failed to parse devUserCourses:', e)
+          }
         }
       }
       setLoading(false)
@@ -333,13 +377,15 @@ const DegreePlanner = () => {
   
   for (const course of completedCourses) {
     let parsed = parsePeriod(course.period)
-    if (!parsed) {
+    // Check for null, undefined, or "Unknown" string
+    if (!parsed || course.period === 'Unknown' || course.period === null || course.period === undefined || course.period === '') {
       // Use current period as default for courses without period data
       const now = new Date()
       const currentYear = now.getFullYear()
       const month = now.getMonth()
       let currentPeriod = month >= 8 && month <= 9 ? 1 : month >= 10 && month <= 11 ? 2 : month >= 0 && month <= 1 ? 3 : month >= 2 && month <= 4 ? 4 : month >= 5 && month <= 7 ? 5 : 0
       parsed = { year: currentYear, period: currentPeriod, name: `${currentYear} ${currentPeriod === 0 ? 'Summer' : toRoman(currentPeriod)}` }
+      console.log('Using default period for:', course.courses?.code, 'credits:', course.courses?.credits)
     }
     
     const key = `${parsed.year}-${parsed.period}`
@@ -352,7 +398,8 @@ const DegreePlanner = () => {
           planned: 0,
           cumulative: 0,
           cumulativeWithPlanned: 0,
-          gpa: 0
+          actualGpa: 0,
+          projectedGpa: 0
         }
       }
       semesterMap[key].completed += course.courses?.credits || 0
@@ -374,7 +421,8 @@ const DegreePlanner = () => {
             planned: 0,
             cumulative: 0,
             cumulativeWithPlanned: 0,
-            gpa: 0
+            actualGpa: 0,
+            projectedGpa: 0
           }
         }
         // Add to this period's planned (not cumulative)
@@ -394,7 +442,8 @@ const DegreePlanner = () => {
         planned: existing?.planned || 0,
         cumulative: 0,
         cumulativeWithPlanned: 0,
-        gpa: 0
+        actualGpa: 0,
+        projectedGpa: 0
       }
     })
     
@@ -413,12 +462,13 @@ const DegreePlanner = () => {
       sem.cumulativeWithPlanned = cumulativeCredits + cumulativePlannedCredits
     })
     
-    // Build cumulative GPA timeline including:
-    // - completed courses (with what-if grade overrides)
-    // - planned courses that have a selected what-if grade
-    let cumulativeGradePoints = 0
-    let cumulativeGradedCredits = 0
-    const gpaPointIndices: number[] = []
+    // Build cumulative GPA timelines — actual (real grades only) and projected (with what-if overrides + planned)
+    let actualGradePoints = 0
+    let actualGradedCredits = 0
+    let projectedGradePoints = 0
+    let projectedGradedCredits = 0
+    const actualGpaIndices: number[] = []
+    const projectedGpaIndices: number[] = []
 
     sortedSemesters.forEach((sem, idx) => {
       const semCompleted = completedCourses.filter(c => {
@@ -427,11 +477,15 @@ const DegreePlanner = () => {
       })
 
       for (const c of semCompleted) {
-        const grade = gradeAdjustments[c.id] !== undefined ? gradeAdjustments[c.id] : c.grade
-        if (grade !== null && grade !== undefined) {
-          const credits = c.courses?.credits || 0
-          cumulativeGradePoints += grade * credits
-          cumulativeGradedCredits += credits
+        const credits = c.courses?.credits || 0
+        if (c.grade !== null && c.grade !== undefined) {
+          actualGradePoints += c.grade * credits
+          actualGradedCredits += credits
+        }
+        const projGrade = gradeAdjustments[c.id] !== undefined ? gradeAdjustments[c.id] : c.grade
+        if (projGrade !== null && projGrade !== undefined) {
+          projectedGradePoints += projGrade * credits
+          projectedGradedCredits += credits
         }
       }
 
@@ -444,50 +498,33 @@ const DegreePlanner = () => {
         const plannedGrade = gradeAdjustments[c.id]
         if (plannedGrade !== null && plannedGrade !== undefined) {
           const credits = c.courses?.credits || 0
-          cumulativeGradePoints += plannedGrade * credits
-          cumulativeGradedCredits += credits
+          projectedGradePoints += plannedGrade * credits
+          projectedGradedCredits += credits
         }
       }
 
-      sem.gpa = cumulativeGradedCredits > 0 ? cumulativeGradePoints / cumulativeGradedCredits : 0
-      if (cumulativeGradedCredits > 0) gpaPointIndices.push(idx)
+      sem.actualGpa = actualGradedCredits > 0 ? actualGradePoints / actualGradedCredits : 0
+      sem.projectedGpa = projectedGradedCredits > 0 ? projectedGradePoints / projectedGradedCredits : 0
+      if (actualGradedCredits > 0) actualGpaIndices.push(idx)
+      if (projectedGradedCredits > 0) projectedGpaIndices.push(idx)
     })
 
-    // Keep GPA line up to the last point that has graded credits, hide later points.
-    const lastGpaIdx = gpaPointIndices.length > 0 ? gpaPointIndices[gpaPointIndices.length - 1] : -1
+    const lastActualIdx = actualGpaIndices.length > 0 ? actualGpaIndices[actualGpaIndices.length - 1] : -1
+    const lastProjectedIdx = projectedGpaIndices.length > 0 ? projectedGpaIndices[projectedGpaIndices.length - 1] : -1
     sortedSemesters.forEach((sem, idx) => {
-      if (idx > lastGpaIdx) sem.gpa = 0
+      if (idx > lastActualIdx) sem.actualGpa = 0
+      if (idx > lastProjectedIdx) sem.projectedGpa = 0
     })
 
     return sortedSemesters
   }
 
-  const semesterData = buildSemesterData()
-  
+  const semesterData = useMemo(() => buildSemesterData(), [completedCourses, plannedCourses, goalDate, gradeAdjustments])
+
   const buildChartData = (): ChartDataPoint[] => {
-    // First pass: create basic data
-    let lastGPA = 0
-    let hasGradedCredits = false
-    
-    // Find currentPeriodIdx by checking if period has ended
-    let currentPeriodIdx = 0
-    for (let i = 0; i < semesterData.length; i++) {
-      if (!isPeriodEnded(semesterData[i].year, semesterData[i].period)) {
-        currentPeriodIdx = i - 1 >= 0 ? i - 1 : i
-        break
-      }
-    }
-    if (currentPeriodIdx < 0) currentPeriodIdx = 0
-    
     const data = semesterData.map((sem, idx) => {
       const periodKey = sem.period === 0 ? 'S' : toRoman(sem.period)
       const label = `${sem.year}-${periodKey}`
-      
-      if (sem.gpa > 0 || hasGradedCredits) {
-        lastGPA = sem.gpa > 0 ? sem.gpa : lastGPA
-        hasGradedCredits = true
-      }
-      
       return {
         index: idx,
         label,
@@ -496,7 +533,8 @@ const DegreePlanner = () => {
         actualCredits: sem.cumulative,
         plannedCredits: sem.cumulativeWithPlanned,
         plannedOnlyCredits: sem.planned,
-        gpa: lastGPA,
+        actualGpa: sem.actualGpa,
+        projectedGpa: sem.projectedGpa,
         period: sem.period,
         isCurrentOrFuture: !isPeriodEnded(sem.year, sem.period)
       }
@@ -561,7 +599,7 @@ const DegreePlanner = () => {
     return combinedData
   }
 
-  const chartData = buildChartData()
+  const chartData = useMemo(() => buildChartData(), [semesterData, targetCredits])
   
   // Find the index where planned line should START (first period with planned credits)
   let plannedStartIdx = chartData.findIndex(d => d.plannedOnlyCredits && d.plannedOnlyCredits > 0)
@@ -592,32 +630,24 @@ const DegreePlanner = () => {
     return <div className="p-8 text-center text-gray-400">Loading...</div>
   }
 
-  // Use chartData directly (already contains idealCredits)
   const computedDisplayData = chartData
 
-  const projectedGradedCredits = [
-    ...completedCourses,
-    ...plannedCourses
-  ].reduce((sum, uc) => {
-    const grade = gradeAdjustments[uc.id] !== undefined ? gradeAdjustments[uc.id] : uc.grade
-    if (grade !== null && grade !== undefined) {
-      return sum + (uc.courses?.credits || 0)
-    }
-    return sum
-  }, 0)
+  // Centralized GPA calculations
+  const actualGradedCredits = completedCourses.reduce((sum, uc) => uc.grade != null ? sum + (uc.courses?.credits || 0) : sum, 0)
+  const actualGradePoints = completedCourses.reduce((sum, uc) => uc.grade != null ? sum + uc.grade * (uc.courses?.credits || 0) : sum, 0)
+  const currentGPA = actualGradedCredits > 0 ? actualGradePoints / actualGradedCredits : 0
 
-  const projectedGradePoints = [
-    ...completedCourses,
-    ...plannedCourses
-  ].reduce((sum, uc) => {
+  const projectedGradedCredits = [...completedCourses, ...plannedCourses].reduce((sum, uc) => {
     const grade = gradeAdjustments[uc.id] !== undefined ? gradeAdjustments[uc.id] : uc.grade
-    if (grade !== null && grade !== undefined) {
-      return sum + grade * (uc.courses?.credits || 0)
-    }
-    return sum
+    return grade != null ? sum + (uc.courses?.credits || 0) : sum
   }, 0)
-
+  const projectedGradePoints = [...completedCourses, ...plannedCourses].reduce((sum, uc) => {
+    const grade = gradeAdjustments[uc.id] !== undefined ? gradeAdjustments[uc.id] : uc.grade
+    return grade != null ? sum + grade * (uc.courses?.credits || 0) : sum
+  }, 0)
   const projectedGPA = projectedGradedCredits > 0 ? projectedGradePoints / projectedGradedCredits : 0
+
+  const hasWhatIf = Object.keys(gradeAdjustments).length > 0
 
   const updatePlannedCoursePeriods = async (plannedRowId: string, nextPeriods: string[]) => {
     const normalized = serializePlannedPeriods(nextPeriods)
@@ -723,47 +753,7 @@ const DegreePlanner = () => {
               <div className="text-gray-500">Remaining</div>
             </div>
             <div className="text-center border-l pl-4 flex items-center justify-center">
-              <span className="text-gray-500 font-medium mr-1">Academic Index:</span>
-              <span className="font-semibold text-black mr-3">
-                {(() => {
-                  const now = new Date()
-                  const currentMonth = now.getMonth() + 1
-                  const currentYear = now.getFullYear()
-                  let currentPeriod = 0
-                  if (currentMonth >= 9 && currentMonth <= 10) currentPeriod = 1
-                  else if (currentMonth >= 11 && currentMonth <= 12) currentPeriod = 2
-                  else if (currentMonth >= 1 && currentMonth <= 2) currentPeriod = 3
-                  else if (currentMonth >= 3 && currentMonth <= 4) currentPeriod = 4
-                  else if (currentMonth >= 5 && currentMonth <= 6) currentPeriod = 5
-                  
-                  const gradedCourses = completedCourses.filter((uc: any) => {
-                    if (uc.grade == null || !uc.period) return false
-                    const p = parsePeriod(uc.period)
-                    if (!p || !p.year) return false
-                    if (p.year === currentYear && p.period === currentPeriod) return false
-                    if (p.year === currentYear - 1 && currentPeriod <= 2 && p.period > 2) return true
-                    if (p.year === currentYear && p.period < currentPeriod && p.period > 2) return true
-                    if (p.year < currentYear) return true
-                    return false
-                  })
-                  const gradedCredits = gradedCourses.reduce((sum, uc) => sum + (uc.courses?.credits || 0), 0)
-                  const gradePoints = gradedCourses.reduce((sum, uc) => sum + ((uc.grade || 0) * (uc.courses?.credits || 0)), 0)
-                  const gpa = gradedCredits > 0 ? gradePoints / gradedCredits : 0
-                  
-                  const semesterSet = new Set<string>()
-                  gradedCourses.forEach((uc: any) => {
-                    const p = parsePeriod(uc.period)
-                    if (p && p.year) {
-                      semesterSet.add(`${p.year}-${p.period}`)
-                    }
-                  })
-                  const semesters = semesterSet.size
-                  const academicIndex = gradedCredits > 0 && semesters > 0 ? (gpa * gradedCredits) / semesters : 0
-                  return academicIndex.toFixed(2)
-                })()}
-              </span>
-              <span className="text-gray-400">|</span>
-              <span className="text-gray-500 font-medium ml-3 mr-1">GPA:</span>
+              <span className="text-gray-500 font-medium mr-1">GPA:</span>
               <span className="font-semibold text-gray-700">
                 {(() => {
                   const now = new Date()
@@ -798,17 +788,6 @@ const DegreePlanner = () => {
                   <span className="font-semibold text-blue-600">{projectedGPA.toFixed(2)}</span>
                 </>
               )}
-              <div className="group relative ml-2">
-                <svg className="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div className="hidden group-hover:block absolute z-50 right-0 bottom-full mb-2 w-72 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg">
-                  <p className="font-semibold mb-1">Academic Index Calculation</p>
-                  <p className="mb-2">(Credits × GPA) ÷ Academic semesters</p>
-                  <p className="text-gray-400 text-[10px]">Excludes current semester. Based on courses with grades entered before the deadline.</p>
-                  <p className="mt-2 text-[10px] text-gray-400 border-t border-gray-700 pt-2">Note: For official applications, verify with your school's exchange coordinator as policies may vary.</p>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -1121,48 +1100,23 @@ const DegreePlanner = () => {
         )}
 
         {/* GPA Tracker */}
-        {chartData.some(d => d.gpa > 0) && (
+        {chartData.some(d => d.actualGpa > 0) ? (
           <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold">GPA Progress</h2>
               <div className="flex items-center gap-4">
-                {(() => {
-                  const now = new Date()
-                  const currentMonth = now.getMonth() + 1
-                  const currentYear = now.getFullYear()
-                  let currentPeriod = 0
-                  if (currentMonth >= 9 && currentMonth <= 10) currentPeriod = 1
-                  else if (currentMonth >= 11 && currentMonth <= 12) currentPeriod = 2
-                  else if (currentMonth >= 1 && currentMonth <= 2) currentPeriod = 3
-                  else if (currentMonth >= 3 && currentMonth <= 4) currentPeriod = 4
-                  else if (currentMonth >= 5 && currentMonth <= 6) currentPeriod = 5
-                  
-                  const gradedCourses = completedCourses.filter((uc: any) => {
-                    if (uc.grade == null || !uc.period) return false
-                    const p = parsePeriod(uc.period)
-                    if (!p || !p.year) return false
-                    if (p.year === currentYear && p.period === currentPeriod) return false
-                    if (p.year === currentYear - 1 && currentPeriod <= 2 && p.period > 2) return true
-                    if (p.year === currentYear && p.period < currentPeriod && p.period > 2) return true
-                    if (p.year < currentYear) return true
-                    return false
-                  })
-                  const gradedCredits = gradedCourses.reduce((sum, uc) => sum + (uc.courses?.credits || 0), 0)
-                  const gradePoints = gradedCourses.reduce((sum, uc) => sum + ((uc.grade || 0) * (uc.courses?.credits || 0)), 0)
-                  const currentGPA = gradedCredits > 0 ? gradePoints / gradedCredits : 0
-                  return currentGPA > 0 ? (
-                    <>
-                      <span className="text-sm text-gray-600">
-                        Current GPA: <span className="font-bold text-gray-900">{currentGPA.toFixed(2)}</span>
+                {currentGPA > 0 && (
+                  <>
+                    <span className="text-sm text-gray-600">
+                      Current GPA: <span className="font-bold text-gray-900">{currentGPA.toFixed(2)}</span>
+                    </span>
+                    {hasWhatIf && (
+                      <span className="text-sm text-blue-600">
+                        → Projected: <span className="font-bold text-blue-600">{projectedGPA.toFixed(2)}</span>
                       </span>
-                      {Object.keys(gradeAdjustments).length > 0 && (
-                        <span className="text-sm text-blue-600">
-                          → Modified: <span className="font-bold text-blue-600">{projectedGPA.toFixed(2)}</span>
-                        </span>
-                      )}
-                    </>
-                  ) : null
-                })()}
+                    )}
+                  </>
+                )}
                 <button
                   onClick={() => setEditingGradeModal(true)}
                   className="text-xs bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 font-medium shadow-sm flex items-center gap-1"
@@ -1176,52 +1130,33 @@ const DegreePlanner = () => {
             </div>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={computedDisplayData.filter((d, i) => i <= currentPeriodIdx && d.gpa > 0)} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid 
-                    strokeDasharray="3 3" 
-                    stroke="#e5e7eb"
-                    vertical={false}
-                  />
-                  <XAxis 
-                    dataKey="label" 
+                <LineChart
+                  data={computedDisplayData.filter(d => d.actualGpa > 0 || (hasWhatIf && d.projectedGpa > 0))}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                  <XAxis
+                    dataKey="label"
                     type="category"
                     interval={0}
                     tick={({ x, y, payload }) => {
                       const idx = payload.index as number
-                      if (idx === undefined) return null
-                      const gpaData = computedDisplayData.filter((_, i) => i <= currentPeriodIdx && computedDisplayData[i]?.gpa > 0)
+                      const gpaData = computedDisplayData.filter(d => d.actualGpa > 0 || (hasWhatIf && d.projectedGpa > 0))
                       if (!gpaData[idx]) return null
                       const dataPoint = gpaData[idx]
                       const periodLabel = dataPoint.periodLabel
                       const displayYear = dataPoint.year
-                      
-                      // X-Axis Label Logic:
-                      // Period on TOP, Year BELOW
-                      // Period I starts new academic year: "2023-2024"
-                      const isPeriodI = periodLabel === 'I'
-                      
-                      let periodLabelDisplay = ''
-                      let yearLabelDisplay = ''
-                      
-                      
-                      if (isPeriodI) {
-                        // Period I: "2023-2024" academic year
-                        yearLabelDisplay = `${displayYear}-${displayYear + 1}`
-                        periodLabelDisplay = 'I'
-                      } else {
-                        // Other periods: show period only, no year
-                        periodLabelDisplay = periodLabel
-                        yearLabelDisplay = ''
-                      }
-                      
+                      const firstIIdx = gpaData.findIndex(d => d.periodLabel === 'I')
+                      const isFirstI = periodLabel === 'I' && idx === firstIIdx
+                      const showYear = idx === 0 || isFirstI
                       return (
                         <g transform={`translate(${x},${y})`}>
                           <text x={0} y={0} dy={0} textAnchor="middle" fill="#374151" fontSize={11}>
-                            {periodLabelDisplay}
+                            {periodLabel}
                           </text>
-                          {yearLabelDisplay && (
+                          {showYear && (
                             <text x={0} y={14} dy={0} textAnchor="middle" fill="#9ca3af" fontSize={9}>
-                              {yearLabelDisplay}
+                              {`${displayYear}-${displayYear + 1}`}
                             </text>
                           )}
                         </g>
@@ -1229,50 +1164,54 @@ const DegreePlanner = () => {
                     }}
                   />
                   <YAxis tick={{ fontSize: 12 }} domain={[1, 5]} />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
-                    formatter={(value: any) => [`${Number(value).toFixed(2)} GPA`, 'Cumulative GPA']}
-                    labelFormatter={(label: any, payload: any) => {
-                      const idx = payload?.[0]?.dataIndex
-                      if (idx === undefined || idx >= computedDisplayData.length) return String(label)
-                      const dataPoint = computedDisplayData[idx]
-                      const period = dataPoint?.periodLabel || ''
-                      const year = dataPoint?.year || ''
-                      return `Period ${period} (${year})`
+                    formatter={(value: any, name: any) => [`${Number(value).toFixed(2)}`, name]}
+                    labelFormatter={(_: any, payload: any) => {
+                      const d = payload?.[0]?.payload
+                      return d ? `Period ${d.periodLabel} (${d.year})` : ''
                     }}
                   />
-                  <ReferenceLine y={targetGPA} stroke="#22c55e" strokeDasharray="5 5" label={`Goal (${targetGPA})`} />
+                  <Legend />
+                  <ReferenceLine y={targetGPA} stroke="#22c55e" strokeWidth={2} strokeDasharray="5 5" label={`Goal (${targetGPA})`} />
                   {currentPeriodIdx >= 0 && (
-                    <ReferenceLine 
-                      x={computedDisplayData[currentPeriodIdx]?.periodLabel} 
-                      stroke="#9ca3af" 
-                      strokeDasharray="3 3" 
-                      strokeWidth={1}
-                    />
+                    <ReferenceLine x={computedDisplayData[currentPeriodIdx]?.label} stroke="#9ca3af" strokeDasharray="3 3" strokeWidth={1} />
                   )}
                   {currentPeriodIdx >= 0 && (
-                    <ReferenceDot 
-                      x={computedDisplayData[currentPeriodIdx]?.periodLabel} 
-                      y={computedDisplayData[currentPeriodIdx]?.gpa || 0} 
-                      r={6} 
-                      fill="#ef4444" 
-                      stroke="white" 
-                      strokeWidth={2} 
+                    <ReferenceDot
+                      x={computedDisplayData[currentPeriodIdx]?.label}
+                      y={computedDisplayData[currentPeriodIdx]?.actualGpa || 0}
+                      r={6} fill="#ef4444" stroke="white" strokeWidth={2}
                     />
                   )}
-                  <Line 
-                    type="monotone" 
-                    dataKey="gpa" 
-                    stroke="#10b981" 
+                  <Line
+                    type="monotone"
+                    dataKey="actualGpa"
+                    stroke="#10b981"
                     strokeWidth={3}
                     name="Cumulative GPA"
                     dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
-                    strokeLinecap="round"
                     connectNulls={true}
                   />
+                  {hasWhatIf && (
+                    <Line
+                      type="monotone"
+                      dataKey="projectedGpa"
+                      stroke="#3b82f6"
+                      strokeWidth={2}
+                      strokeDasharray="5 5"
+                      name="Projected GPA"
+                      dot={false}
+                      connectNulls={true}
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </div>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6 text-center text-gray-400 text-sm">
+            No graded courses yet. Complete some courses to see your GPA progress.
           </div>
         )}
 
@@ -1416,134 +1355,201 @@ const DegreePlanner = () => {
         </div>
 
         {/* Add Course Modal */}
-        {addCourseModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl p-6 w-full max-w-md">
-              <h3 className="font-semibold text-lg mb-4">Add Planned Course</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm text-gray-500 mb-1">Course</label>
-                  <input
-                    type="text"
-                    placeholder="Search course code or name..."
-                    className="w-full border rounded px-3 py-2"
-                    onChange={async (e) => {
-                      if (e.target.value.length >= 2) {
-                        const { data } = await supabase
-                          .from('courses')
-                          .select('*')
-                          .or(`code.ilike.%${e.target.value}%,name.ilike.%${e.target.value}%`)
-                          .limit(100)
-                        if (data) {
-                          setSearchResults(data)
-                        }
-                      } else {
-                        setSearchResults([])
-                      }
-                    }}
-                  />
-                  {searchResults.length > 0 && (
-                    <div className="mt-2 space-y-2 max-h-64 overflow-auto border rounded">
-                      {searchResults.map(course => (
-                        <div 
-                          key={course.id} 
-                          className="p-2 bg-purple-50 rounded cursor-pointer hover:bg-purple-100"
-                          onClick={() => {
-                            setSelectedCourse(course)
-                            setSearchResults([])
-                          }}
-                        >
-                          <div className="font-medium">{course.code}</div>
-                          <div className="text-sm text-gray-600">{course.name}</div>
-                          <div className="text-xs text-gray-500">{course.credits} credits</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {selectedCourse && (
-                    <div className="mt-2 p-2 bg-purple-50 rounded">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-medium">{selectedCourse.code}</div>
-                          <div className="text-sm text-gray-600">{selectedCourse.name}</div>
-                          <div className="text-xs text-gray-500">{selectedCourse.credits} credits</div>
-                        </div>
-                        <button 
-                          onClick={() => {
-                            setSelectedCourse(null)
-                            setSearchResults([])
-                          }}
-                          className="text-gray-400 hover:text-gray-600"
-                        >
-                          ×
-                        </button>
+        {addCourseModal && (() => {
+          const closeModal = () => {
+            setAddCourseModal(false)
+            setAddModalPeriod('')
+            setAddModalCourses([])
+            setAddModalSearch('')
+            setAddModalSearchResults([])
+          }
+
+          // addModalCourses is { course, period }[]
+          const entries: { course: any; period: string }[] = addModalCourses as any
+          const totalCount = entries.length
+
+          // Group queued entries by period for the summary panel
+          const byPeriod: Record<string, any[]> = {}
+          for (const e of entries) {
+            if (!byPeriod[e.period]) byPeriod[e.period] = []
+            byPeriod[e.period].push(e.course)
+          }
+
+          return (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-xl">
+                {/* Header */}
+                <div className="px-6 pt-5 pb-4 border-b flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-lg">Plan Courses</h3>
+                    <p className="text-xs text-gray-400 mt-0.5">Select a semester, search for courses, and add them. Switch semesters to plan across multiple periods.</p>
+                  </div>
+                  <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-xl leading-none ml-4">×</button>
+                </div>
+
+                <div className="flex flex-1 overflow-hidden">
+                  {/* Left: period picker + search */}
+                  <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 border-r">
+                    {/* Period grid */}
+                    <div>
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Semester</p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {PLAN_PERIOD_OPTIONS.map(p => {
+                          const countInPeriod = byPeriod[p]?.length || 0
+                          return (
+                            <button
+                              key={p}
+                              onClick={() => setAddModalPeriod(p)}
+                              className={`px-3 py-2 rounded-lg text-sm font-medium border transition-all text-left flex items-center justify-between gap-2 ${
+                                addModalPeriod === p
+                                  ? 'bg-purple-600 text-white border-purple-600'
+                                  : 'bg-white text-gray-700 border-gray-200 hover:border-purple-400 hover:text-purple-700'
+                              }`}
+                            >
+                              <span>{p}</span>
+                              {countInPeriod > 0 && (
+                                <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${addModalPeriod === p ? 'bg-white/30 text-white' : 'bg-purple-100 text-purple-700'}`}>
+                                  {countInPeriod}
+                                </span>
+                              )}
+                            </button>
+                          )
+                        })}
                       </div>
                     </div>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-500 mb-2">Periods</label>
-                  <div className="grid grid-cols-3 gap-2 max-h-48 overflow-auto">
-                    {PLAN_PERIOD_OPTIONS.map((p) => (
-                      <label key={p} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-1 rounded">
+
+                    {/* Course search — shown when a period is active */}
+                    {addModalPeriod && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                          Add to <span className="text-purple-700">{addModalPeriod}</span>
+                        </p>
                         <input
-                          type="checkbox"
-                          checked={selectedPeriods.includes(p)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedPeriods([...selectedPeriods, p])
+                          type="text"
+                          placeholder="Search by code or name..."
+                          value={addModalSearch}
+                          onChange={async (e) => {
+                            setAddModalSearch(e.target.value)
+                            if (e.target.value.length >= 2) {
+                              const { data } = await supabase
+                                .from('courses')
+                                .select('id, code, name, credits')
+                                .or(`code.ilike.%${e.target.value}%,name.ilike.%${e.target.value}%`)
+                                .limit(30)
+                              setAddModalSearchResults(data || [])
                             } else {
-                              setSelectedPeriods(selectedPeriods.filter(period => period !== p))
+                              setAddModalSearchResults([])
                             }
                           }}
-                          className="rounded"
+                          className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
                         />
-                        <span>{p}</span>
-                      </label>
-                    ))}
+                        {addModalSearchResults.length > 0 && (
+                          <div className="mt-2 border rounded-lg overflow-hidden max-h-52 overflow-y-auto">
+                            {addModalSearchResults.map(course => {
+                              const alreadyAdded = entries.some(e => e.course.id === course.id)
+                              return (
+                                <button
+                                  key={course.id}
+                                  disabled={alreadyAdded}
+                                  onClick={() => {
+                                    if (!alreadyAdded) {
+                                      setAddModalCourses((prev: any) => [...prev, { course, period: addModalPeriod }])
+                                      setAddModalSearch('')
+                                      setAddModalSearchResults([])
+                                    }
+                                  }}
+                                  className={`w-full text-left px-3 py-2 border-b last:border-b-0 flex items-center justify-between gap-2 transition-colors ${
+                                    alreadyAdded ? 'bg-gray-50 text-gray-400 cursor-default' : 'hover:bg-purple-50'
+                                  }`}
+                                >
+                                  <div className="min-w-0">
+                                    <span className="font-mono text-xs text-purple-700">{course.code}</span>
+                                    <span className="text-sm text-gray-700 ml-2 truncate">{course.name}</span>
+                                  </div>
+                                  <span className="text-xs text-gray-400 shrink-0">{course.credits} cr</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {!addModalPeriod && (
+                      <p className="text-xs text-gray-400 text-center pt-2">Select a semester above to search for courses</p>
+                    )}
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">{selectedPeriods.length} selected</p>
+
+                  {/* Right: summary of all queued entries */}
+                  <div className="w-64 shrink-0 overflow-y-auto px-4 py-4">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+                      Plan {totalCount > 0 ? `· ${totalCount} course${totalCount > 1 ? 's' : ''}` : ''}
+                    </p>
+                    {totalCount === 0 ? (
+                      <p className="text-xs text-gray-300 text-center mt-8">No courses added yet</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {Object.entries(byPeriod).map(([period, courses]) => (
+                          <div key={period}>
+                            <p className="text-xs font-semibold text-purple-700 mb-1">{period}</p>
+                            <div className="space-y-1">
+                              {courses.map((course: any) => (
+                                <div key={course.id} className="flex items-center justify-between bg-purple-50 rounded px-2 py-1.5 gap-1">
+                                  <div className="min-w-0">
+                                    <p className="font-mono text-xs text-purple-800 truncate">{course.code}</p>
+                                    <p className="text-xs text-gray-500 truncate">{course.credits} cr</p>
+                                  </div>
+                                  <button
+                                    onClick={() => setAddModalCourses((prev: any) => prev.filter((e: any) => e.course.id !== course.id))}
+                                    className="text-gray-300 hover:text-red-500 text-base leading-none shrink-0"
+                                  >×</button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => {
-                    setAddCourseModal(false)
-                    setSelectedCourse(null)
-                    setSelectedPeriods(['2024-2025 I'])
-                  }}
-                  className="flex-1 px-4 py-2 border rounded hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={async () => {
-                    if (selectedCourse && selectedPeriods.length > 0) {
+
+                {/* Footer */}
+                <div className="px-6 py-4 border-t flex gap-3">
+                  <button onClick={closeModal} className="flex-1 px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">
+                    Cancel
+                  </button>
+                  <button
+                    disabled={totalCount === 0 || addModalSaving}
+                    onClick={async () => {
+                      if (totalCount === 0) return
+                      setAddModalSaving(true)
                       const { data: { user } } = await supabase.auth.getUser()
                       if (user) {
-                        const { data: existingPlanned } = await supabase
-                          .from('user_courses')
-                          .select('id, period')
-                          .eq('user_id', user.id)
-                          .eq('course_id', selectedCourse.id)
-                          .eq('status', 'planned')
-                          .maybeSingle()
+                        await Promise.all(entries.map(async ({ course, period }) => {
+                          const { data: existing } = await supabase
+                            .from('user_courses')
+                            .select('id, period')
+                            .eq('user_id', user.id)
+                            .eq('course_id', course.id)
+                            .eq('status', 'planned')
+                            .maybeSingle()
 
-                        if (existingPlanned) {
-                          const existingPeriods = parsePlannedPeriods(existingPlanned.period).map((p) =>
-                            p.period === 0 ? `${p.year}-${p.year + 1} Summer` : `${p.year}-${p.year + 1} ${toRoman(p.period)}`
-                          )
-                          const merged = serializePlannedPeriods([...existingPeriods, ...selectedPeriods])
-                          await supabase.from('user_courses').update({ period: merged }).eq('id', existingPlanned.id)
-                        } else {
-                          await supabase.from('user_courses').insert({
-                            user_id: user.id,
-                            course_id: selectedCourse.id,
-                            status: 'planned',
-                            period: serializePlannedPeriods(selectedPeriods),
-                            grade: null
-                          })
-                        }
+                          if (existing) {
+                            const existingPeriods = parsePlannedPeriods(existing.period).map(p =>
+                              p.period === 0 ? `${p.year}-${p.year + 1} Summer` : `${p.year}-${p.year + 1} ${toRoman(p.period)}`
+                            )
+                            const merged = serializePlannedPeriods([...existingPeriods, period])
+                            await supabase.from('user_courses').update({ period: merged }).eq('id', existing.id)
+                          } else {
+                            await supabase.from('user_courses').insert({
+                              user_id: user.id,
+                              course_id: course.id,
+                              status: 'planned',
+                              period,
+                              grade: null
+                            })
+                          }
+                        }))
+
                         const { data } = await supabase
                           .from('user_courses')
                           .select('*, courses(*)')
@@ -1551,20 +1557,18 @@ const DegreePlanner = () => {
                           .eq('status', 'planned')
                         if (data) setPlannedCourses(data)
                       }
-                    }
-                    setAddCourseModal(false)
-                    setSelectedCourse(null)
-                    setSelectedPeriods(['2024-2025 I'])
-                  }}
-                  disabled={!selectedCourse}
-                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
-                >
-                  Add
-                </button>
+                      setAddModalSaving(false)
+                      closeModal()
+                    }}
+                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {addModalSaving ? 'Saving...' : `Save ${totalCount > 0 ? totalCount + ' course' + (totalCount > 1 ? 's' : '') : ''}`}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* Modify Grades Modal */}
         {editingGradeModal && (

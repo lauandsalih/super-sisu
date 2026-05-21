@@ -1,4 +1,4 @@
-Role: You are a Senior Fullstack Engineer. You must follow these strict logic and constraints for the "Aalto Path" platform.
+Role: You are a Senior Fullstack Engineer. You must follow these strict logic and constraints for the "Aalto Path" platform. Codex wil review your code once you're done.
 
 1. Period & Year Alignment (The "Sisu-Sync" Fix)
 The Bug: Currently, planning a course for Year YYYY Period X incorrectly maps it to YYYY+1 in the Timeline.
@@ -25,31 +25,7 @@ When hovering over the GPA or Credit graphs (Recharts), the "Hover Preview/Toolt
 After the first I in the x-axis, no other I should be labeled with a year.
 
 6. Academic Index Calculation
-Formula: (credits × credit-weighted GPA) / number of academic semesters enrolled as an attending student (not including the current semester)
-
-Calculation Rules (exchanges 2023-24 onwards, all schools):
-- Only studies entered in the Aalto student register by the deadline are counted
-- Only studies completed while the current study right has been valid
-- Changed study right (same field): credits/semesters under expired study right are NOT counted
-- Changed study right (different field): depends on exchange school applied to
-- Graduated bachelor → same field master: bachelor credits/semesters ARE counted
-- Credits before study right start: NOT counted (except Open University admittance credits below)
-- Study right in multiple fields: only courses from the field of the applied exchange place count
-- Non-attending semesters: NOT counted
-
-Open University Credits (basis of admittance):
-- BIZ: 42 credits → +1.5 semesters added
-- CHEM, ELEC, ENG, SCI: 27 credits → +1 semester added
-- Student must inform about OU studies in application
-
-Statutory Exclusions (documented):
-- Military/non-military service
-- Maternity/paternity/parental leave
-- Medical condition preventing study
-- AYY board service
-(Note: Requires certificate/documentation)
-
-Non-attending enrollment: NOT counted for academic index 
+Remove the academic Index altogether.
 
 7. Privacy & Data Handling
 PDF Transcripts: Must be processed in memory and immediately discarded after extraction. Never permanently stored in any storage bucket. User data must be reassurable with clear messaging about this.
@@ -78,11 +54,10 @@ Broad SELECT policies on storage.objects must NOT be created or maintained. Each
 13. Navigation Page Order
 Pages must be ordered: Academic Tracker → My Profile → Search Courses (left to right)
 
-14. Expandable Course Cards (Search Page)
-When clicking a course card in Search Courses, the card must expand inline to show all course details and features (info, statistics, plan buttons) instead of navigating to a separate page. This keeps users in context and eliminates unnecessary page navigation.
 
 15. Course Page Format
 Course page should display information in SISU-like format:
+- Plan course. Clicking on this opens a modal to edit its periods. The course will be visible in planned courses and timeline.
 - Learning outcomes
 - Content
 - Description
@@ -96,7 +71,8 @@ All new features, requirements, and decisions must be documented in constraints.
 Users can manually add courses to their profile (My Courses) via a modal with search, period, grade, and status selection.
 
 18. Timeline Period Editing
-Clicking on a planned course in the timeline opens a modal to edit its periods.
+Clicking on a planned course in the timeline AS WELL AS IN THE planned opens a modal to edit its periods.
+
 
 19. Landing Page Auth
 Add authentication section between subtitle and action cards:
@@ -106,5 +82,11 @@ Add authentication section between subtitle and action cards:
 - Show existing cards but visually secondary until authenticated
 
 20. Credit Progress Line Styling
-- Credit line should stop at the last completed period (no nulls beyond)
-- Planned line should start from the endpoint of credit line and extend through planned periods 
+- Credit line should stop directly at the last completed period (no nulls beyond)
+- Planned line should start from the endpoint of credit line and extend through planned periods
+
+21. Pass/Fail Course Period Extraction
+- PDF extraction extracts completionDate for pass/fail courses (grade = null). Remove status "Unknown" from the pass courses' completiondate.
+- Backend converts completionDate to academic period (YYYY-YYYY X format) when saving to DB
+- Frontend converts completionDate to academic period for dev mode/localStorage display
+- Period mapping: Sep-Oct=Period I, Nov-Dec=Period II, Jan-Feb=Period III, Mar-May=Period IV, Jun-Jul=Period V, Aug=Summer 

@@ -9,6 +9,32 @@ const toRoman = (n: number): string => {
   return romans[n - 1] || n.toString()
 }
 
+const convertDateToPeriod = (dateStr: string | undefined | null): string | null => {
+  if (!dateStr) return null
+  const months: Record<string, number> = {
+    'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
+    'apr': 4, 'april': 4, 'may': 5, 'jun': 6, 'june': 6, 'jul': 7, 'july': 7,
+    'aug': 8, 'august': 8, 'sep': 9, 'sept': 9, 'september': 9, 'oct': 10, 'october': 10,
+    'nov': 11, 'november': 11, 'dec': 12, 'december': 12
+  }
+  const match = dateStr.match(/(\d+)\s+([a-z]+)\s+(\d{4})/i)
+  if (!match) return dateStr
+  const monthName = match[2].toLowerCase()
+  const year = parseInt(match[3])
+  const month = months[monthName]
+  if (!month) return dateStr
+  let academicYear: number, periodNum: number
+  if (month >= 9 && month <= 10) { academicYear = year; periodNum = 1 }
+  else if (month >= 11 && month <= 12) { academicYear = year; periodNum = 2 }
+  else if (month <= 2) { academicYear = year - 1; periodNum = 3 }
+  else if (month <= 5) { academicYear = year - 1; periodNum = 4 }
+  else if (month <= 7) { academicYear = year - 1; periodNum = 5 }
+  else { academicYear = year; periodNum = 0 }
+  const nextYear = (academicYear + 1).toString().slice(-2)
+  const periodStr = periodNum === 0 ? 'Summer' : toRoman(periodNum)
+  return `${academicYear}-${nextYear} ${periodStr}`
+}
+
 const formatPeriod = (period: string | null): string => {
   if (!period) return ''
   let result = period.trim()
@@ -56,11 +82,18 @@ const Profile = () => {
   const [addCoursePeriod, setAddCoursePeriod] = useState<string>('')
   const [addCourseStatus, setAddCourseStatus] = useState<string>('completed')
   const [courseList, setCourseList] = useState<any[]>([])
+  const [timedOut, setTimedOut] = useState(false)
+  const [editingGradeId, setEditingGradeId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setTimedOut(true), 10000)
+    return () => clearTimeout(timer)
+  }, [])
 
   useEffect(() => {
     const getUser = async () => {
-      // ALWAYS use real Supabase auth (session persists in browser)
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user ?? null
       setUser(user)
       
       if (user) {
@@ -71,21 +104,7 @@ const Profile = () => {
         if (data) setUserCourses(data)
       }
       
-      // Fetch all available courses for search
-      let allCourses: any[] = []
-      let page = 0
-      const pageSize = 1000
-      while (true) {
-        const { data: coursesData } = await supabase
-          .from('courses')
-          .select('id, code, name, credits')
-          .order('code')
-          .range(page * pageSize, (page + 1) * pageSize - 1)
-        if (!coursesData || coursesData.length === 0) break
-        allCourses = [...allCourses, ...coursesData]
-        page++
-      }
-      setCourseList(allCourses)
+      setCourseList([])
       
       setLoading(false)
     }
@@ -147,11 +166,22 @@ const Profile = () => {
     setSelectedCourses(newSelected)
   }
 
-  if (loading) return <div className="p-8 text-gray-400">Loading...</div>
+  const updateGrade = async (id: string, grade: number | null) => {
+    const { error } = await supabase
+      .from('user_courses')
+      .update({ grade })
+      .eq('id', id)
+    if (!error) {
+      setUserCourses(prev => prev.map(uc => uc.id === id ? { ...uc, grade } : uc))
+    }
+    setEditingGradeId(null)
+  }
+
+  if (loading && !timedOut) return <div className="p-8 text-gray-400">Loading...</div>
 
   if (!user) {
-    // Dev mode: show dev profile
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      const adminMode = sessionStorage.getItem('adminMode')
       return (
         <div className="min-h-screen bg-gray-50">
           <div className="max-w-3xl mx-auto px-4 py-12">
@@ -165,17 +195,99 @@ const Profile = () => {
               </div>
               <button
                 onClick={() => {
-if (sessionStorage.getItem('adminMode')) {
-                      sessionStorage.removeItem('adminMode')
-                    } else {
-                      sessionStorage.setItem('adminMode', 'true')
-                    }
-                  }}
-                  className="text-xs mt-2 px-2 py-1 rounded border"
-                >
-                  {sessionStorage.getItem('adminMode') ? '✓ Admin ON' : 'Admin OFF'}
-                </button>
+                  if (sessionStorage.getItem('adminMode')) {
+                    sessionStorage.removeItem('adminMode')
+                  } else {
+                    sessionStorage.setItem('adminMode', 'true')
+                  }
+                  window.location.reload()
+                }}
+                className="text-xs mt-2 px-2 py-1 rounded border"
+              >
+                {adminMode ? '✓ Admin ON' : 'Admin OFF'}
+              </button>
             </div>
+            {adminMode && (
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Import Transcript</h2>
+                <p className="text-sm text-gray-500 mb-4">Upload PDF transcript to import courses.</p>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                  <input
+                    type="file"
+                    id="transcript-upload-dev"
+                    accept=".pdf"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      setUploadingTranscript(true)
+                      setTranscriptMessage('')
+                      try {
+                        const fileName = `dev-user/${Date.now()}-${file.name}`
+                        const uploadResult = await supabase.storage.from('transcripts').upload(fileName, file)
+                        if (uploadResult.error) {
+                          setTranscriptMessage('Upload failed: ' + uploadResult.error.message)
+                          setUploadingTranscript(false)
+                          return
+                        }
+                        const { data: { publicUrl } } = supabase.storage.from('transcripts').getPublicUrl(fileName)
+                        setUploadingTranscript(false)
+                        setTranscriptMessage('PDF uploaded! Extracting grades...')
+                        setExtractingGrades(true)
+                        const response = await fetch(apiPath('/api/extract-grades'), {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ pdfUrl: publicUrl, userId: 'dev-user' })
+                        })
+                        if (response.ok) {
+                          const data = await response.json()
+                          const withGrades = data.gradesExtracted?.filter((g: any) => g.grade !== null).map((g: any) => `${g.code}:${g.grade}`).join(', ') || 'none'
+                          const totalCredits = data.gradesExtracted.reduce((sum: number, g: any) => sum + (g.credits || 0), 0)
+                    const missingPeriod = data.gradesExtracted.filter((g: any) => !g.date).map((g: any) => g.code).join(', ')
+                    const msg = missingPeriod ? ` Imported ${data.imported}/${data.total} courses (${totalCredits} cr). Missing period: ${missingPeriod}` : `Imported ${data.imported}/${data.total} courses (${totalCredits} credits). Grades: ${withGrades}`
+                    setTranscriptMessage(msg)
+                          if (data.gradesExtracted) {
+                            const fakeUserCourses = data.gradesExtracted.map((g: any, i: number) => ({
+                              id: `imported-${i}`,
+                              user_id: 'dev-user',
+                              course_id: g.code,
+                              status: 'completed',
+                              grade: g.grade,
+                              period: convertDateToPeriod(g.date),
+                              courses: { id: g.code, code: g.code, name: g.code, credits: g.credits }
+                            }))
+                            setUserCourses(fakeUserCourses)
+                            localStorage.setItem('devUserCourses', JSON.stringify(fakeUserCourses))
+                          }
+                        } else {
+                          setTranscriptMessage('Error extracting grades')
+                        }
+                      } catch (error) {
+                        setTranscriptMessage(`Error: ${error instanceof Error ? error.message : 'Upload failed'}`)
+                      } finally {
+                        setUploadingTranscript(false)
+                        setExtractingGrades(false)
+                      }
+                    }}
+                  />
+                  <label htmlFor="transcript-upload-dev" className="cursor-pointer">
+                    <div className="text-4xl mb-2">📄</div>
+                    <div className="text-blue-600 hover:underline">
+                      {uploadingTranscript ? 'Uploading...' : 'Click to upload PDF'}
+                    </div>
+                  </label>
+                </div>
+                {transcriptMessage && (
+                  <p className={`text-sm mt-3 ${transcriptMessage.includes('Error') ? 'text-red-500' : 'text-green-600'}`}>{transcriptMessage}</p>
+                )}
+                {extractingGrades && (
+                  <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+                    <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                    Extracting grades...
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )
@@ -397,20 +509,23 @@ onChange={async (e) => {
                   if (response.ok) {
                     const data = await response.json()
                     const withGrades = data.gradesExtracted?.filter((g: any) => g.grade !== null).map((g: any) => `${g.code}:${g.grade}`).join(', ') || 'none'
-                    setTranscriptMessage(`Imported ${data.imported}/${data.total}. Grades found: ${withGrades}`)
+                    const totalCredits = data.gradesExtracted.reduce((sum: number, g: any) => sum + (g.credits || 0), 0)
+                    const missingPeriod = data.gradesExtracted.filter((g: any) => !g.date).map((g: any) => g.code).join(', ')
+                    const msg = missingPeriod ? `Imported ${data.imported}/${data.total} courses (${totalCredits} cr). Missing period: ${missingPeriod}` : `Imported ${data.imported}/${data.total} courses (${totalCredits} credits). Grades found: ${withGrades}`
+                    setTranscriptMessage(msg)
                     
                     // Save imported courses to localStorage in dev mode, or fetch from Supabase in prod
                     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
                       // Save response data to dev courses
                       if (data.gradesExtracted) {
-                        const fakeUserCourses = data.gradesExtracted.filter((g: any) => g.grade).map((g: any, i: number) => ({
+                        const fakeUserCourses = data.gradesExtracted.map((g: any, i: number) => ({
                           id: `imported-${i}`,
                           user_id: user.id,
                           course_id: g.code,
                           status: 'completed',
                           grade: g.grade,
-                          period: g.date || 'N/A',
-                          courses: { id: g.code, code: g.code, name: g.code, credits: 5 }
+                          period: convertDateToPeriod(g.date),
+                          courses: { id: g.code, code: g.code, name: g.code, credits: g.credits }
                         }))
                         setUserCourses(fakeUserCourses)
                         localStorage.setItem('devUserCourses', JSON.stringify(fakeUserCourses))
@@ -612,8 +727,40 @@ onChange={async (e) => {
                     <div className="font-medium text-gray-900">{uc.courses?.name}</div>
                     <div className="text-sm text-gray-500">{uc.courses?.credits} credits{formatPeriod(uc.period) && ` • ${formatPeriod(uc.period)}`}</div>
                   </div>
-                  {uc.grade !== null && (
-                    <div className="text-2xl font-bold text-green-600">{uc.grade}</div>
+                  {uc.status === 'completed' && (
+                    <div className="flex flex-col items-center gap-1">
+                      {editingGradeId === uc.id ? (
+                        <select
+                          autoFocus
+                          defaultValue={uc.grade ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            updateGrade(uc.id, val === '' ? null : parseInt(val))
+                          }}
+                          onBlur={() => setEditingGradeId(null)}
+                          className="border rounded px-2 py-1 text-sm"
+                        >
+                          <option value="">No grade</option>
+                          <option value="5">5</option>
+                          <option value="4">4</option>
+                          <option value="3">3</option>
+                          <option value="2">2</option>
+                          <option value="1">1</option>
+                        </select>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => setEditingGradeId(uc.id)}
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            Modify grade
+                          </button>
+                          <span className={`text-2xl font-bold ${uc.grade !== null ? 'text-green-600' : 'text-gray-300'}`}>
+                            {uc.grade !== null ? uc.grade : '—'}
+                          </span>
+                        </>
+                      )}
+                    </div>
                   )}
                 </div>
               ))}
@@ -632,14 +779,16 @@ onChange={async (e) => {
               type="text"
               placeholder="Search course by code or name..."
               value={addCourseSearch}
-              onChange={(e) => {
+              onChange={async (e) => {
                 setAddCourseSearch(e.target.value)
                 if (e.target.value.length >= 2) {
-                  const results = courseList.filter(c => 
-                    c.code.toLowerCase().includes(e.target.value.toLowerCase()) ||
-                    c.name.toLowerCase().includes(e.target.value.toLowerCase())
-                  ).slice(0, 10)
-                  setAddCourseResults(results)
+                  const q = e.target.value.toLowerCase()
+                  const { data } = await supabase
+                    .from('courses')
+                    .select('id, code, name, credits')
+                    .or(`code.ilike.%${q}%,name.ilike.%${q}%`)
+                    .limit(10)
+                  setAddCourseResults(data || [])
                 } else {
                   setAddCourseResults([])
                 }

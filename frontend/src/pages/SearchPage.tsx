@@ -178,7 +178,7 @@ const SearchPage = () => {
       <div className="max-w-3xl mx-auto px-4 py-12">
         <a href="/" className="text-blue-600 text-sm mb-6 block">Back to home</a>
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Search Courses</h1>
-        <p className="text-gray-500 mb-2">Find Aalto courses, teaching periods and program info</p>
+        <p className="text-gray-500 mb-2">Find Aalto courses, read or leave reviews</p>
         <p className="text-xs text-orange-600 mb-6 bg-orange-50 p-2 rounded">
           Note: This list contains courses from the official public Aalto courses API translated to English. It may lack some course implementations or information.
         </p>

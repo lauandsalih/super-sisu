@@ -14,10 +14,10 @@ export default function Navbar() {
           <span className="text-2xl font-bold text-[#0065BD]">A!</span>
           <span className="text-lg font-bold text-black tracking-tight">Academic Planner</span>
         </Link>
-        
+
         <nav className="flex items-center gap-8">
-          <Link 
-            to="/degree" 
+          <Link
+            to="/degree"
             className={`text-sm font-medium pb-2 border-b-2 ${isActive('/degree') ? 'text-black border-[#0065BD]' : 'text-gray-500 border-transparent hover:text-black'}`}
           >
             Academic Tracker

@@ -159,15 +159,15 @@ const redirectUrl = window.location.hostname === 'localhost' || window.location.
           <div className="grid grid-cols-3 gap-6 pointer-events-none opacity-50">
             <div className="block p-6 bg-white border-2 border-gray-200 rounded-lg text-center cursor-not-allowed">
               <h3 className="text-xl font-bold text-black mb-2">Academic Tracker</h3>
-              <p className="text-sm text-gray-500">Plan your semesters</p>
+              <p className="text-sm text-gray-500">Track your academic progress & modify grades</p>
             </div>
             <div className="block p-6 bg-white border-2 border-gray-200 rounded-lg text-center cursor-not-allowed">
               <h3 className="text-xl font-bold text-black mb-2">My Profile</h3>
-              <p className="text-sm text-gray-500">View your courses & grades</p>
+              <p className="text-sm text-gray-500">Upload your PDF transcript to extract completed courses & grades</p>
             </div>
             <Link to="/search" className="block p-6 bg-white border-2 border-gray-200 rounded-lg hover:border-[#0065BD] hover:scale-[1.02] transition text-center cursor-pointer">
               <h3 className="text-xl font-bold text-black mb-2">Search Courses</h3>
-              <p className="text-sm text-gray-500">Browse all Aalto courses</p>
+              <p className="text-sm text-gray-500">Browse all Aalto courses & view/leave reviews</p>
             </Link>
           </div>
         </section>
@@ -179,10 +179,10 @@ const redirectUrl = window.location.hostname === 'localhost' || window.location.
     <div className="max-w-[1200px] mx-auto px-8 py-12">
       <section className="text-center py-16">
         <h1 className="text-5xl font-extrabold text-black mb-4 tracking-tight">
-          Master Your Studies at Aalto.
+          Master Your Studies at Aalto. Plan your academic journey with ease.
         </h1>
         <p className="text-xl text-gray-500 mb-8">
-          Track progress, plan semesters, and explore reviews.
+          Check how far off track or on track you are with your degree, plan your semesters and explore courses with reviews from your peers. Sign in easily to get started!
         </p>
       </section>
 
@@ -268,11 +268,11 @@ const redirectUrl = window.location.hostname === 'localhost' || window.location.
         <div className="grid grid-cols-3 gap-6">
           <Link to="/degree" className={`block p-6 bg-white border-2 border-gray-200 rounded-lg hover:border-[#0065BD] hover:scale-[1.02] transition text-center cursor-pointer ${user ? '' : 'opacity-60'}`}>
             <h3 className="text-xl font-bold text-black mb-2">Academic Tracker</h3>
-            <p className="text-sm text-gray-500">Plan your semesters</p>
+            <p className="text-sm text-gray-500">Track your academic progress & modify grades</p>
           </Link>
           <Link to="/profile" className={`block p-6 bg-white border-2 border-gray-200 rounded-lg hover:border-[#0065BD] hover:scale-[1.02] transition text-center cursor-pointer ${user ? '' : 'opacity-60'}`}>
             <h3 className="text-xl font-bold text-black mb-2">My Profile</h3>
-            <p className="text-sm text-gray-500">View your courses & grades</p>
+            <p className="text-sm text-gray-500">Upload your PDF transcript to extract completed courses & grades</p>
           </Link>
           <Link to="/search" className="block p-6 bg-white border-2 border-gray-200 rounded-lg hover:border-[#0065BD] hover:scale-[1.02] transition text-center cursor-pointer">
             <h3 className="text-xl font-bold text-black mb-2">Search Courses</h3>

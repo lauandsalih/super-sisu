@@ -16,12 +16,12 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const loadFavorites = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
         const { data } = await supabase
           .from('user_favorites')
           .select('course_id')
-          .eq('user_id', user.id)
+          .eq('user_id', session.user.id)
         if (data) {
           setFavorites(data.map(f => f.course_id))
         }
@@ -31,10 +31,10 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const addFavorite = async (courseId: string) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user) {
       await supabase.from('user_favorites').insert({
-        user_id: user.id,
+        user_id: session.user.id,
         course_id: courseId
       })
       setFavorites(prev => [...prev, courseId])
@@ -42,10 +42,10 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
   }
 
   const removeFavorite = async (courseId: string) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user) {
       await supabase.from('user_favorites').delete()
-        .eq('user_id', user.id)
+        .eq('user_id', session.user.id)
         .eq('course_id', courseId)
       setFavorites(prev => prev.filter(id => id !== courseId))
     }
