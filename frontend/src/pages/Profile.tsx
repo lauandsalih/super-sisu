@@ -81,7 +81,6 @@ const Profile = () => {
   const [addCourseGrade, setAddCourseGrade] = useState<string>('')
   const [addCoursePeriod, setAddCoursePeriod] = useState<string>('')
   const [addCourseStatus, setAddCourseStatus] = useState<string>('completed')
-  const [courseList, setCourseList] = useState<any[]>([])
   const [timedOut, setTimedOut] = useState(false)
   const [editingGradeId, setEditingGradeId] = useState<string | null>(null)
 
@@ -103,8 +102,6 @@ const Profile = () => {
           .eq('user_id', user.id)
         if (data) setUserCourses(data)
       }
-      
-      setCourseList([])
       
       setLoading(false)
     }
