@@ -66,9 +66,15 @@ const DegreePlanner = () => {
   const [editingPeriodCourse, setEditingPeriodCourse] = useState<any>(null)
   const [editingPeriodRowId, setEditingPeriodRowId] = useState<string>('')
   const [editingGradeModal, setEditingGradeModal] = useState(false)
-  const [gradeAdjustments, setGradeAdjustments] = useState<Record<string, number | null>>({})
+  const [gradeAdjustments, setGradeAdjustments] = useState<Record<string, number | null>>(() => {
+    try { return JSON.parse(localStorage.getItem('gradeAdjustments') || '{}') } catch { return {} }
+  })
   const [includePlanned, setIncludePlanned] = useState(false)
   const [editingGradDateModal, setEditingGradDateModal] = useState(false)
+
+  useEffect(() => {
+    localStorage.setItem('gradeAdjustments', JSON.stringify(gradeAdjustments))
+  }, [gradeAdjustments])
 
   // Generate periods dynamically: previous + current + 15 future
   const PLAN_PERIOD_OPTIONS = (() => {
