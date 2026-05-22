@@ -189,10 +189,12 @@ function extractCoursesFromText(text: string) {
     }
   }
 
-  // Aalto code formats:
-  // Letter+dash: MS-A0101, ECON-C5000, MNGT-A4004, ABL-A1300 (2-6 letters, dash, letter+digits)
-  // Numeric: 31C02100, 30A02000 (2 digits, letter, 5+ digits)
-  const CODE_RE = /\(([A-Z]{2,6}-[A-Z][A-Z0-9]{3,}|[0-9]{2}[A-Z][0-9]{5,})\)/gi
+  // Aalto code formats found in the database:
+  // Standard letter+dash:   MS-A0101, ECON-C5000, MNGT-A4004, ALC-2310 (2-6 letters, dash, alphanumeric)
+  // Numeric prefix:         31C02100, 30A02000, 23C510 (2 digits, letter, digits)
+  // A-prefix archive:       A21A00110, A30A02000 (A + 2 digits + letter + digits)
+  // Thesis/special:         ARTS-L2030, BIZ-CV, AAE-EV (handled via standard letter+dash)
+  const CODE_RE = /\(([A-Z]{2,6}-[A-Z0-9][A-Z0-9]{2,}|[A-Z]?[0-9]{2}[A-Z][0-9]{3,})\)/gi
 
   for (const line of joined) {
     CODE_RE.lastIndex = 0
