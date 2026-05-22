@@ -642,23 +642,61 @@ onChange={async (e) => {
                       : 'Delete courses'}
                   </button>
                   {deleteMode && (
-                    <button
-                      onClick={async () => {
-                        if (!user) return
-                        const { error } = await supabase
-                          .from('user_courses')
-                          .delete()
-                          .eq('user_id', user.id)
-                        if (!error) {
-                          setUserCourses([])
-                          setDeleteMode(false)
-                          setSelectedCourses(new Set())
-                        }
-                      }}
-                      className="text-sm px-3 py-1 rounded text-red-600 hover:text-red-800"
-                    >
-                      Delete all
-                    </button>
+                    <>
+                      <button
+                        onClick={async () => {
+                          if (!user) return
+                          const { error } = await supabase
+                            .from('user_courses')
+                            .delete()
+                            .eq('user_id', user.id)
+                            .eq('status', 'completed')
+                          if (!error) {
+                            setUserCourses(prev => prev.filter(uc => uc.status !== 'completed'))
+                            setDeleteMode(false)
+                            setSelectedCourses(new Set())
+                          }
+                        }}
+                        className="text-sm px-3 py-1 rounded text-red-600 hover:text-red-800"
+                      >
+                        Delete completed
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!user) return
+                          const { error } = await supabase
+                            .from('user_courses')
+                            .delete()
+                            .eq('user_id', user.id)
+                            .eq('status', 'planned')
+                          if (!error) {
+                            setUserCourses(prev => prev.filter(uc => uc.status !== 'planned'))
+                            setDeleteMode(false)
+                            setSelectedCourses(new Set())
+                          }
+                        }}
+                        className="text-sm px-3 py-1 rounded text-red-600 hover:text-red-800"
+                      >
+                        Delete planned
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!user) return
+                          const { error } = await supabase
+                            .from('user_courses')
+                            .delete()
+                            .eq('user_id', user.id)
+                          if (!error) {
+                            setUserCourses([])
+                            setDeleteMode(false)
+                            setSelectedCourses(new Set())
+                          }
+                        }}
+                        className="text-sm px-3 py-1 rounded text-red-600 hover:text-red-800"
+                      >
+                        Delete all
+                      </button>
+                    </>
                   )}
                 </>
               )}
