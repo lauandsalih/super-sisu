@@ -1327,7 +1327,19 @@ const DegreePlanner = () => {
             </h3>
             <div className="space-y-2 max-h-64 overflow-auto">
               {plannedCourses.map(uc => (
-                <div key={uc.id} className="flex justify-between items-center p-2 bg-purple-50 rounded">
+                <div
+                  key={uc.id}
+                  className="flex justify-between items-center p-2 bg-purple-50 rounded cursor-pointer hover:bg-purple-100 transition-colors"
+                  onClick={() => {
+                    setEditingPeriodCourse(uc.courses)
+                    setEditingPeriodRowId(uc.id)
+                    const currentPeriods = parsePlannedPeriods(uc.period).map(p =>
+                      p.period === 0 ? `${p.year}-${p.year + 1} Summer` : `${p.year}-${p.year + 1} ${toRoman(p.period)}`
+                    )
+                    setSelectedPeriods(currentPeriods.length > 0 ? currentPeriods : [])
+                    setEditingPeriodModal(true)
+                  }}
+                >
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-mono text-purple-700">{uc.courses?.code}</span>
@@ -1342,7 +1354,8 @@ const DegreePlanner = () => {
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500">{uc.courses?.credits} cr</span>
                     <button
-                      onClick={async () => {
+                      onClick={async (e) => {
+                        e.stopPropagation()
                         await supabase.from('user_courses').delete().eq('id', uc.id)
                         setPlannedCourses(plannedCourses.filter(p => p.id !== uc.id))
                       }}
