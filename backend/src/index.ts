@@ -47,7 +47,6 @@ app.post('/api/extract-grades', async (req, res) => {
     
     const pdfData = await pdfParse(pdfBuffer)
     const pdfText = pdfData.text
-    console.log('RAW PDF TEXT:\n' + pdfText.substring(0, 6000))
 
     const courses = extractCoursesFromText(pdfText)
     console.log('Extracted courses:', courses.length, JSON.stringify(courses))
@@ -156,71 +155,84 @@ function extractCoursesFromText(text: string) {
   const courses: { courseCode: string; grade: number | null; credits: number; completionDate?: string }[] = []
   const addedCodes = new Set<string>()
 
-  // Aalto course code formats:
-  // - Letter-prefix with dash:  MS-A0101, CS-A1111, ECON-C5000, MNGT-A4004, BIZ-A0103, ABL-A1300
-  // - Numeric-prefix no dash:   31C02100, 30A02000, 32A00130, 28A00110
-  // All appear inside parentheses in the transcript: (CODE) or (CODE\nCODE_CONTINUED)
-  const CODE_RE = /\(([A-Z]{2,6}-[A-Z]\d{3,}[A-Z0-9]*|[0-9]{2}[A-Z][0-9]{5,})\)/gi
+  // pdf-parse strips spaces between columns, so the raw text looks like:
+  //   "Game Theory (ECON-C5000)6 cren320 Feb 2026"
+  //   "Scientific thinking and writing  (BIZ-A0105)2 crfiPass31 Dec 2025"
+  // Multi-line course names split the code across lines:
+  //   "Mastering influence in business communication (MNGT-\nA4004)\n6 cren37 Apr 2026"
+  // So we must: 1) rejoin hyphen-broken codes, 2) rejoin continuation lines, 3) parse no-space format
 
-  // Normalize text: collapse lines that are continuations of a wrapped course entry.
-  // A continuation line has no opening parenthesis and no "X cr" pattern — it's just
-  // the rest of a long course name. We join it onto the previous line.
-  const rawLines = text.split('\n')
-  const lines: string[] = []
-  for (const raw of rawLines) {
-    const t = raw.trim()
-    if (!t) { lines.push(''); continue }
-    // If this line looks like it belongs to the previous line (no code, no "X cr" at start,
-    // but previous line has an unclosed course entry), append it.
-    const prevLine = lines[lines.length - 1] || ''
-    const prevHasCode = CODE_RE.test(prevLine)
-    CODE_RE.lastIndex = 0
-    const prevHasCr = /\d+\s*cr\b/i.test(prevLine)
-    const thisHasCode = CODE_RE.test(t)
-    CODE_RE.lastIndex = 0
-    const thisStartsWithCode = /^\([A-Z0-9]/.test(t)
+  // Step 1: rejoin lines where a code is broken across lines by a hyphen
+  // e.g. "(MNGT-\nA4004)" → "(MNGT-A4004)"
+  let normalized = text.replace(/\(([A-Z]{2,6})-\n([A-Z][A-Z0-9]+)\)/g, '($1-$2)')
 
-    if (prevHasCode && !prevHasCr && !thisHasCode && !thisStartsWithCode && lines.length > 0) {
-      lines[lines.length - 1] = prevLine + ' ' + t
+  // Step 2: join continuation lines onto their course line.
+  // A course line contains a closing paren followed by digits (credits).
+  // A continuation line is a bare code fragment like "A4001)\n6 cren3..."
+  // already handled above. Now join lines where prev ends with ")" and next starts with digits.
+  normalized = normalized.replace(/\)\n(\d+ cr)/g, ')\n$1') // keep as-is, handled in line join below
+
+  // Step 3: for wrapped course names where the code+data are on the next line,
+  // join lines: if a line ends with ")" and next line starts with a digit (credits), merge.
+  const rawLines = normalized.split('\n')
+  const joined: string[] = []
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i].trim()
+    if (!line) continue
+    // If this line ends with ")" and next line starts with digits (the cr/grade/date line), merge
+    const next = (rawLines[i + 1] || '').trim()
+    if (line.endsWith(')') && /^\d+\s*cr/.test(next)) {
+      joined.push(line + next)
+      i++ // skip next line since we consumed it
     } else {
-      lines.push(t)
+      joined.push(line)
     }
   }
 
-  for (const line of lines) {
+  // Aalto code formats:
+  // Letter+dash: MS-A0101, ECON-C5000, MNGT-A4004, ABL-A1300 (2-6 letters, dash, letter+digits)
+  // Numeric: 31C02100, 30A02000 (2 digits, letter, 5+ digits)
+  const CODE_RE = /\(([A-Z]{2,6}-[A-Z][A-Z0-9]{3,}|[0-9]{2}[A-Z][0-9]{5,})\)/gi
+
+  for (const line of joined) {
     CODE_RE.lastIndex = 0
     let m: RegExpExecArray | null
     while ((m = CODE_RE.exec(line)) !== null) {
       const courseCode = m[1].toUpperCase()
       if (addedCodes.has(courseCode)) continue
 
-      // Extract the part of the line after the closing paren of the code
-      const afterCode = line.substring(m.index + m[0].length).trim()
+      const afterCode = line.substring(m.index + m[0].length)
 
-      // Credits: first "N cr" anywhere in the remaining text
+      // Format (no spaces between columns from pdf-parse):
+      // "6 cren37 Apr 2026"   → credits=6, lang=en, grade=3, date=7 Apr 2026
+      // "2 crfiPass31 Dec 2025" → credits=2, lang=fi, grade=Pass, date=31 Dec 2025
+      // "6 cren320 Feb 2026"  → credits=6, lang=en, grade=3, date=20 Feb 2026
+
       let credits = 0
-      const crMatch = afterCode.match(/(\d+)\s*cr\b/i)
-      if (crMatch) credits = parseInt(crMatch[1], 10)
-
       let grade: number | null = null
       let completionDate: string | null = null
 
-      // Format after code: "Xcr lang grade date" or "Xcr lang Pass date"
-      // Date format: "7 Apr 2026" or "19 May 2025"
-      // Numeric grade: "Xcr en 3 7 Apr 2026"
-      const numGrade = afterCode.match(/\d+\s*cr\s+(?:en|fi|sv)\s+([1-5])\s+(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/i)
-      if (numGrade) {
-        grade = parseInt(numGrade[1], 10)
-        completionDate = `${numGrade[2]} ${numGrade[3]} ${numGrade[4]}`
+      // Numeric grade — no spaces: "6 cren37 Apr 2026" or "6 cr en 3 7 Apr 2026"
+      const numMatch = afterCode.match(/(\d+)\s*cr\s*(?:en|fi|sv)\s*([1-5])\s*(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/i)
+      if (numMatch) {
+        credits = parseInt(numMatch[1], 10)
+        grade = parseInt(numMatch[2], 10)
+        completionDate = `${numMatch[3]} ${numMatch[4]} ${numMatch[5]}`
       }
 
       if (!completionDate) {
-        // Pass grade: "Xcr en Pass 7 Apr 2026"
-        const passGrade = afterCode.match(/\d+\s*cr\s+(?:en|fi|sv)\s+Pass\s+(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/i)
-        if (passGrade) {
+        // Pass grade — no spaces: "2 crfiPass31 Dec 2025"
+        const passMatch = afterCode.match(/(\d+)\s*cr\s*(?:en|fi|sv)\s*Pass\s*(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/i)
+        if (passMatch) {
+          credits = parseInt(passMatch[1], 10)
           grade = null
-          completionDate = `${passGrade[1]} ${passGrade[2]} ${passGrade[3]}`
+          completionDate = `${passMatch[2]} ${passMatch[3]} ${passMatch[4]}`
         }
+      }
+
+      if (!credits) {
+        const crOnly = afterCode.match(/(\d+)\s*cr/i)
+        if (crOnly) credits = parseInt(crOnly[1], 10)
       }
 
       courses.push({ courseCode, grade, credits, completionDate: completionDate || undefined })
