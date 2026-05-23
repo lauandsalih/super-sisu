@@ -94,7 +94,6 @@ const Profile = () => {
   const [activeDegreeId, setActiveDegreeId] = useState<string | null>(null)
   const [editingDegreeName, setEditingDegreeName] = useState<string | null>(null)
   const [degreeNameInput, setDegreeNameInput] = useState('')
-  const [showImportForDegree, setShowImportForDegree] = useState<string | null>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => setTimedOut(true), 10000)
