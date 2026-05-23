@@ -81,6 +81,8 @@ const DegreePlanner = () => {
   })
   const [includePlanned, setIncludePlanned] = useState(false)
   const [editingGradDateModal, setEditingGradDateModal] = useState(false)
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [sharing, setSharing] = useState(false)
 
   useEffect(() => {
     localStorage.setItem('gradeAdjustments', JSON.stringify(gradeAdjustments))
@@ -741,9 +743,6 @@ const DegreePlanner = () => {
     // Academic year format: "2023-2024 I"
     return `${year}-${year + 1} ${toRoman(period)}`
   }
-
-  const [shareUrl, setShareUrl] = useState<string | null>(null)
-  const [sharing, setSharing] = useState(false)
 
   const sharePlan = async () => {
     const { data: { user } } = await supabase.auth.getUser()
