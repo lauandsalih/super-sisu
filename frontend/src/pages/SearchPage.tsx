@@ -13,6 +13,7 @@ type Course = {
   major: string
   department: string | null
   avg_grade: number | null
+  is_active: boolean | null
 }
 
 type CourseReviewStats = {
@@ -44,6 +45,7 @@ const SearchPage = () => {
   const [reviewStats, setReviewStats] = useState<CourseReviewStats>({})
   const [myCourseIds, setMyCourseIds] = useState<Set<string>>(new Set())
   const [showMyCourses, setShowMyCourses] = useState(false)
+  const [showActiveOnly, setShowActiveOnly] = useState(false)
   const { toggleFavorite, isFavorite } = useFavorites()
 
   useEffect(() => {
@@ -152,8 +154,12 @@ const SearchPage = () => {
       )
     }
 
+    if (showActiveOnly) {
+      filtered = filtered.filter(c => c.is_active === true)
+    }
+
     return filtered
-  }, [allCourses, query, selectedDepartments, selectedLevels, showMyCourses, myCourseIds])
+  }, [allCourses, query, selectedDepartments, selectedLevels, showMyCourses, myCourseIds, showActiveOnly])
 
   const totalPages = Math.ceil(filteredCourses.length / PAGE_SIZE)
   const paginatedCourses = filteredCourses.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
@@ -169,6 +175,7 @@ const SearchPage = () => {
   const clearFilters = () => {
     setSelectedDepartments([])
     setSelectedLevels([])
+    setShowActiveOnly(false)
     setQuery('')
     setPage(0)
   }
@@ -194,7 +201,7 @@ const SearchPage = () => {
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-          <div className="flex justify-between items-center mb-4 pb-4 border-b">
+          <div className="flex flex-wrap gap-2 mb-4 pb-4 border-b">
             <button
               onClick={() => setShowMyCourses(!showMyCourses)}
               className={`text-sm px-4 py-2 rounded-full border transition ${
@@ -204,6 +211,16 @@ const SearchPage = () => {
               }`}
             >
               My Courses ({myCourseIds.size})
+            </button>
+            <button
+              onClick={() => setShowActiveOnly(!showActiveOnly)}
+              className={`text-sm px-4 py-2 rounded-full border transition ${
+                showActiveOnly
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : 'bg-white text-emerald-700 border-emerald-300 hover:border-emerald-400'
+              }`}
+            >
+              Active courses only
             </button>
           </div>
           
@@ -339,6 +356,16 @@ const SearchPage = () => {
                     {course.language && (
                       <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full">
                         {course.language}
+                      </span>
+                    )}
+                    {course.is_active === true && (
+                      <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-full font-medium">
+                        Active
+                      </span>
+                    )}
+                    {course.is_active === false && (
+                      <span className="bg-gray-100 text-gray-400 text-xs px-2 py-1 rounded-full">
+                        Inactive
                       </span>
                     )}
                   </div>

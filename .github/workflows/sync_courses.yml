@@ -1,0 +1,21 @@
+name: Sync Courses from Aalto API
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'   # Daily at 6 AM UTC
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run sync
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          AALTO_USER_KEY: ${{ secrets.AALTO_USER_KEY }}
+        run: node scripts/sync_courses.js
