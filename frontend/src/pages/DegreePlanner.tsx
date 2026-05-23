@@ -1729,11 +1729,25 @@ const DegreePlanner = () => {
                     setEditingPeriodModal(false)
                     setEditingPeriodCourse(null)
                     setEditingPeriodRowId('')
-                    setSelectedPeriods(['2024-2025 I'])
+                    setSelectedPeriods([])
                   }}
-                  className="flex-1 px-4 py-2 border rounded hover:bg-gray-50"
+                  className="px-4 py-2 border rounded hover:bg-gray-50 text-sm"
                 >
                   Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!editingPeriodRowId) return
+                    await supabase.from('user_courses').delete().eq('id', editingPeriodRowId)
+                    setPlannedCourses(prev => prev.filter(p => p.id !== editingPeriodRowId))
+                    setEditingPeriodModal(false)
+                    setEditingPeriodCourse(null)
+                    setEditingPeriodRowId('')
+                    setSelectedPeriods([])
+                  }}
+                  className="px-4 py-2 border border-red-200 text-red-600 rounded hover:bg-red-50 text-sm"
+                >
+                  Remove from plan
                 </button>
                 <button
                   onClick={async () => {
@@ -1749,9 +1763,9 @@ const DegreePlanner = () => {
                     setEditingPeriodModal(false)
                     setEditingPeriodCourse(null)
                     setEditingPeriodRowId('')
-                    setSelectedPeriods(['2024-2025 I'])
+                    setSelectedPeriods([])
                   }}
-                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm"
                 >
                   Update
                 </button>
