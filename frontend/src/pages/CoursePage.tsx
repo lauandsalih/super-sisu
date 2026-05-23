@@ -49,10 +49,11 @@ const CoursePage = () => {
   const [user, setUser] = useState<any>(null)
   const [userCourse, setUserCourse] = useState<any>(null)
   const [showAddCourseForm, setShowAddCourseForm] = useState(false)
-  const [courseStatus, setCourseStatus] = useState<string>('planned')
+  const [courseStatus] = useState<string>('planned')
   const [showGradeForm, setShowGradeForm] = useState(false)
   const [selectedGrade, setSelectedGrade] = useState<number | null>(null)
   const [realization, setRealization] = useState<CourseRealization | null>(null)
+  const [showReviewPrompt, setShowReviewPrompt] = useState(false)
   const { toggleFavorite, isFavorite } = useFavorites()
 
   useEffect(() => {
@@ -141,12 +142,13 @@ const CoursePage = () => {
     setReviewComment('')
   }
 
-  const addToPlan = async () => {
+  const addToPlan = async (statusOverride?: string) => {
     if (!user || !course) return
+    const status = statusOverride || courseStatus
     await supabase.from('user_courses').insert({
       user_id: user.id,
       course_id: course.id,
-      status: courseStatus,
+      status,
       period: course.period || '2025 P1',
       grade: null
     })
@@ -324,14 +326,39 @@ const CoursePage = () => {
                 {['completed', 'current', 'planned'].map(status => (
                   <button
                     key={status}
-                    onClick={() => { setCourseStatus(status); addToPlan() }}
-                    className="px-3 py-1 border text-sm rounded capitalize"
+                    onClick={async () => {
+                      await addToPlan(status)
+                      if (status === 'completed') setShowReviewPrompt(true)
+                    }}
+                    className="px-3 py-1 border text-sm rounded capitalize hover:bg-gray-100"
                   >
                     {status}
                   </button>
                 ))}
               </div>
               <button onClick={() => setShowAddCourseForm(false)} className="mt-2 text-sm text-gray-500">Cancel</button>
+            </div>
+          )}
+
+          {/* Review prompt after marking completed */}
+          {showReviewPrompt && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm font-medium text-blue-900 mb-1">You completed this course 🎉</p>
+              <p className="text-xs text-blue-700 mb-3">Help other students by leaving a quick review.</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setShowReviewPrompt(false); setShowReviewForm(true) }}
+                  className="px-3 py-1.5 bg-[#0065BD] text-white text-sm rounded hover:bg-[#0055a3]"
+                >
+                  Leave a review
+                </button>
+                <button
+                  onClick={() => setShowReviewPrompt(false)}
+                  className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700"
+                >
+                  Maybe later
+                </button>
+              </div>
             </div>
           )}
         </div>

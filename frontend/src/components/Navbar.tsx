@@ -28,11 +28,17 @@ export default function Navbar() {
           >
             My Profile
           </Link>
-          <Link 
-            to="/search" 
+          <Link
+            to="/search"
             className={`text-sm font-medium pb-2 border-b-2 ${isActive('/search') ? 'text-black border-[#0065BD]' : 'text-gray-500 border-transparent hover:text-black'}`}
           >
             Search Courses
+          </Link>
+          <Link
+            to="/gpa-simulator"
+            className={`text-sm font-medium pb-2 border-b-2 ${isActive('/gpa-simulator') ? 'text-black border-[#0065BD]' : 'text-gray-500 border-transparent hover:text-black'}`}
+          >
+            GPA Simulator
           </Link>
         </nav>
 

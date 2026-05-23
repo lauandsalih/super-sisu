@@ -654,6 +654,14 @@ const DegreePlanner = () => {
   const remaining = Math.max(0, targetCredits - completedCredits - plannedCredits)
   const progress = ((completedCredits + plannedCredits) / targetCredits) * 100
 
+  // Credit velocity: avg credits per period from completed courses
+  const periodsWithCredits = semesterData.filter(s => s.completed > 0)
+  const avgCreditsPerPeriod = periodsWithCredits.length > 0
+    ? completedCredits / periodsWithCredits.length
+    : 0
+  const remainingAfterPlanned = Math.max(0, targetCredits - completedCredits - plannedCredits)
+  const periodsToGrad = avgCreditsPerPeriod > 0 ? Math.ceil(remainingAfterPlanned / avgCreditsPerPeriod) : null
+
   if (loading) {
     return <div className="p-8 text-center text-gray-400">Loading...</div>
   }
@@ -732,14 +740,75 @@ const DegreePlanner = () => {
     return `${year}-${year + 1} ${toRoman(period)}`
   }
 
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [sharing, setSharing] = useState(false)
+
+  const sharePlan = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    setSharing(true)
+    const gradedCourses = completedCourses.filter(uc => uc.grade != null)
+    const gpa = gradedCourses.length > 0
+      ? gradedCourses.reduce((s, uc) => s + (uc.grade! * (uc.courses?.credits || 0)), 0) /
+        gradedCourses.reduce((s, uc) => s + (uc.courses?.credits || 0), 0)
+      : null
+    const payload = {
+      name: user.email?.split('@')[0] || 'Student',
+      completedCredits,
+      gpa: gpa ? Math.round(gpa * 100) / 100 : null,
+      courses: [...completedCourses, ...plannedCourses].map(uc => ({
+        code: uc.courses?.code,
+        name: uc.courses?.name,
+        credits: uc.courses?.credits,
+        status: uc.status,
+        grade: uc.grade,
+        period: uc.period
+      }))
+    }
+    const token = Math.random().toString(36).slice(2) + Date.now().toString(36)
+    await supabase.from('shared_plans').insert({ token, user_id: user.id, payload })
+    setShareUrl(`${window.location.origin}/shared/${token}`)
+    setSharing(false)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
         <Link to="/" className="text-blue-600 text-sm hover:underline">← Back to home</Link>
         
-        <div className="mt-4 mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">My Degree Plan</h1>
-          <p className="text-gray-500 text-sm">Track your progress toward graduation</p>
+        <div className="mt-4 mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">My Degree Plan</h1>
+            <p className="text-gray-500 text-sm">Track your progress toward graduation</p>
+          </div>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <button
+              onClick={sharePlan}
+              disabled={sharing}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition disabled:opacity-50"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+              {sharing ? 'Generating...' : 'Share plan'}
+            </button>
+            {shareUrl && (
+              <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 max-w-xs">
+                <input
+                  readOnly
+                  value={shareUrl}
+                  className="text-xs text-blue-700 bg-transparent flex-1 min-w-0 outline-none"
+                  onClick={e => (e.target as HTMLInputElement).select()}
+                />
+                <button
+                  onClick={() => { navigator.clipboard.writeText(shareUrl); }}
+                  className="text-xs text-blue-600 hover:underline shrink-0"
+                >
+                  Copy
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Degree selector */}
@@ -865,6 +934,44 @@ const DegreePlanner = () => {
             </div>
           </div>
         </div>
+
+        {/* Graduation countdown / credit velocity */}
+        {(periodsToGrad !== null || goalDate) && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6 flex flex-wrap gap-6 items-center justify-center text-center">
+            {periodsToGrad !== null && remainingAfterPlanned > 0 && (
+              <div>
+                <div className="text-2xl font-bold text-blue-600">{periodsToGrad}</div>
+                <div className="text-xs text-gray-500">periods to go at current pace</div>
+                <div className="text-xs text-gray-400">({avgCreditsPerPeriod.toFixed(0)} cr/period avg)</div>
+              </div>
+            )}
+            {remainingAfterPlanned === 0 && (
+              <div>
+                <div className="text-2xl font-bold text-green-600">🎓 Done!</div>
+                <div className="text-xs text-gray-500">You've planned enough credits to graduate</div>
+              </div>
+            )}
+            {goalDate && (() => {
+              const now = new Date()
+              const goal = new Date(goalDate)
+              const diffMs = goal.getTime() - now.getTime()
+              const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+              const diffMonths = Math.round(diffMs / (1000 * 60 * 60 * 24 * 30))
+              return diffDays > 0 ? (
+                <div>
+                  <div className="text-2xl font-bold text-purple-600">{diffMonths}</div>
+                  <div className="text-xs text-gray-500">months until graduation target</div>
+                  <div className="text-xs text-gray-400">({new Date(goalDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })})</div>
+                </div>
+              ) : (
+                <div>
+                  <div className="text-2xl font-bold text-orange-500">{Math.abs(diffDays)}d</div>
+                  <div className="text-xs text-gray-500">past graduation target</div>
+                </div>
+              )
+            })()}
+          </div>
+        )}
 
         {/* Target Inputs */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
