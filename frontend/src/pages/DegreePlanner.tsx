@@ -747,6 +747,22 @@ const DegreePlanner = () => {
           <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-sm font-semibold text-gray-500">Degree:</span>
+              {degrees.length > 1 && (
+                <button
+                  onClick={() => {
+                    setActiveDegreeId(null)
+                    applyDegreeFilter(allCourses, null)
+                    setTargetCredits(degrees.reduce((sum, d) => sum + (d.target_credits || 0), 0) || 180)
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                    activeDegreeId === null
+                      ? 'bg-gray-800 text-white border-gray-800'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                  }`}
+                >
+                  All degrees
+                </button>
+              )}
               {degrees.map(d => (
                 <button
                   key={d.id}

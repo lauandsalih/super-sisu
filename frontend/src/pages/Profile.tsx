@@ -367,6 +367,18 @@ const Profile = () => {
         <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-sm font-semibold text-gray-500">Degree:</span>
+            {degrees.length > 1 && (
+              <button
+                onClick={() => setActiveDegreeId(null)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                  activeDegreeId === null
+                    ? 'bg-gray-800 text-white border-gray-800'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                }`}
+              >
+                All degrees
+              </button>
+            )}
             {degrees.map(d => (
               <div key={d.id} className="flex items-center gap-1">
                 {editingDegreeName === d.id ? (
@@ -471,28 +483,36 @@ const Profile = () => {
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-gray-900">
-              Degree Progress {activeDegree && <span className="text-gray-400 font-normal text-base">— {activeDegree.name}</span>}
+              Degree Progress{' '}
+              {activeDegreeId === null && degrees.length > 1
+                ? <span className="text-gray-400 font-normal text-base">— All degrees combined</span>
+                : activeDegree && <span className="text-gray-400 font-normal text-base">— {activeDegree.name}</span>
+              }
             </h2>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Target:</span>
-              <input
-                type="number"
-                min={1}
-                value={activeDegree?.target_credits ?? 180}
-                onChange={async e => {
-                  const val = parseInt(e.target.value)
-                  if (!activeDegree || isNaN(val)) return
-                  await supabase.from('user_degrees').update({ target_credits: val }).eq('id', activeDegree.id)
-                  setDegrees(prev => prev.map(d => d.id === activeDegree.id ? { ...d, target_credits: val } : d))
-                }}
-                className="w-20 text-sm border rounded px-2 py-1"
-              />
-              <span className="text-xs text-gray-500">cr</span>
-            </div>
+            {activeDegree && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">Target:</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={activeDegree.target_credits}
+                  onChange={async e => {
+                    const val = parseInt(e.target.value)
+                    if (isNaN(val)) return
+                    await supabase.from('user_degrees').update({ target_credits: val }).eq('id', activeDegree.id)
+                    setDegrees(prev => prev.map(d => d.id === activeDegree.id ? { ...d, target_credits: val } : d))
+                  }}
+                  className="w-20 text-sm border rounded px-2 py-1"
+                />
+                <span className="text-xs text-gray-500">cr</span>
+              </div>
+            )}
           </div>
 
           {(() => {
-            const targetCredits = activeDegree?.target_credits ?? 180
+            const targetCredits = activeDegreeId === null
+              ? degrees.reduce((sum, d) => sum + (d.target_credits || 0), 0) || 180
+              : (activeDegree?.target_credits ?? 180)
             const completedCredits = degreeCourses
               .filter(uc => uc.status === 'completed')
               .reduce((sum, uc) => sum + (uc.courses?.credits || 0), 0)
