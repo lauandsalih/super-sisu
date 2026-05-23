@@ -130,7 +130,7 @@ const DegreePlanner = () => {
       const { data: { user } } = await supabase.auth.getUser()
 
       if (user) {
-        const [coursesData, userData, degreesData] = await Promise.all([
+        const [coursesData, userData] = await Promise.all([
           supabase
             .from('user_courses')
             .select('*, courses(*)')
@@ -141,19 +141,21 @@ const DegreePlanner = () => {
             .select('graduation_date')
             .eq('id', user.id)
             .maybeSingle(),
-          supabase
-            .from('user_degrees')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at')
         ])
+
+        // user_degrees may not exist yet if SQL migration hasn't run — fail gracefully
+        const degreesRes = await supabase
+          .from('user_degrees')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at')
+        const degreesData = degreesRes.error ? { data: null } : degreesRes
 
         if (degreesData.data && degreesData.data.length > 0) {
           setDegrees(degreesData.data)
           const firstId = degreesData.data[0].id
           setActiveDegreeId(firstId)
           if (coursesData.data) applyDegreeFilter(coursesData.data, firstId)
-          // Use first degree's target_credits and graduation_date
           setTargetCredits(degreesData.data[0].target_credits || 180)
           if (degreesData.data[0].graduation_date) setGoalDate(degreesData.data[0].graduation_date)
         } else if (coursesData.data) {

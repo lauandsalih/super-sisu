@@ -8,7 +8,6 @@ import CoursePage from './pages/CoursePage'
 import Profile from './pages/Profile'
 import DegreePlanner from './pages/DegreePlanner'
 import FavoritesPage from './pages/FavoritesPage'
-import GpaSimulator from './pages/GpaSimulator'
 import SharedPlan from './pages/SharedPlan'
 
 function App() {
@@ -23,7 +22,6 @@ function App() {
             <Route path="/profile" element={<Profile />} />
             <Route path="/degree" element={<DegreePlanner />} />
             <Route path="/favorites" element={<FavoritesPage />} />
-            <Route path="/gpa-simulator" element={<GpaSimulator />} />
             <Route path="/shared/:token" element={<SharedPlan />} />
           </Route>
         </Routes>

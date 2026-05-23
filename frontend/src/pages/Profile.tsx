@@ -107,12 +107,12 @@ const Profile = () => {
       setUser(user)
 
       if (user) {
-        const [coursesRes, degreesRes] = await Promise.all([
-          supabase.from('user_courses').select('*, courses(*)').eq('user_id', user.id),
-          supabase.from('user_degrees').select('*').eq('user_id', user.id).order('created_at')
-        ])
+        const coursesRes = await supabase.from('user_courses').select('*, courses(*)').eq('user_id', user.id)
         if (coursesRes.data) setUserCourses(coursesRes.data)
-        if (degreesRes.data && degreesRes.data.length > 0) {
+
+        // user_degrees may not exist yet if SQL migration hasn't run — fail gracefully
+        const degreesRes = await supabase.from('user_degrees').select('*').eq('user_id', user.id).order('created_at')
+        if (!degreesRes.error && degreesRes.data && degreesRes.data.length > 0) {
           setDegrees(degreesRes.data)
           setActiveDegreeId(degreesRes.data[0].id)
         }

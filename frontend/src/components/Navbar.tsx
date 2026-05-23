@@ -34,12 +34,6 @@ export default function Navbar() {
           >
             Search Courses
           </Link>
-          <Link
-            to="/gpa-simulator"
-            className={`text-sm font-medium pb-2 border-b-2 ${isActive('/gpa-simulator') ? 'text-black border-[#0065BD]' : 'text-gray-500 border-transparent hover:text-black'}`}
-          >
-            GPA Simulator
-          </Link>
         </nav>
 
         <div className="flex items-center gap-4">
