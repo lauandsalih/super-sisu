@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { useFavorites } from '../context/FavoritesContext'
 
@@ -35,17 +35,20 @@ const PAGE_SIZE = 50
 
 const SearchPage = () => {
   const [searchParams] = useSearchParams()
-  const [query, setQuery] = useState(searchParams.get('q') || '')
+  const location = useLocation()
+  const restoredState = location.state as { fromSearch?: string; fromPage?: number } | null
+  const [query, setQuery] = useState(restoredState?.fromSearch ?? searchParams.get('q') ?? '')
   const [allCourses, setAllCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(false)
   const [showMoreDepts, setShowMoreDepts] = useState(false)
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([])
   const [selectedLevels, setSelectedLevels] = useState<string[]>([])
-  const [page, setPage] = useState(0)
+  const [page, setPage] = useState(restoredState?.fromPage ?? 0)
   const [reviewStats, setReviewStats] = useState<CourseReviewStats>({})
   const [myCourseIds, setMyCourseIds] = useState<Set<string>>(new Set())
   const [showMyCourses, setShowMyCourses] = useState(false)
   const [showActiveOnly, setShowActiveOnly] = useState(false)
+  const navigate = useNavigate()
   const { toggleFavorite, isFavorite } = useFavorites()
 
   useEffect(() => {
@@ -297,21 +300,21 @@ const SearchPage = () => {
 
             <div className="flex flex-col gap-4">
               {paginatedCourses.map((course) => (
-                <a
+                <div
                   key={course.id}
-                  href={"/course/" + course.id}
-                  className="bg-white rounded-xl border border-gray-200 p-5 block hover:shadow-md transition"
+                  onClick={() => navigate(`/course/${course.id}`, { state: { fromSearch: query, fromPage: page } })}
+                  className="bg-white rounded-xl border border-gray-200 p-5 block hover:shadow-md transition cursor-pointer"
                 >
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-blue-600 font-mono">{course.code}</span>
                       <button
                         onClick={(e) => {
-                          e.preventDefault()
                           e.stopPropagation()
                           toggleFavorite(course.id)
                         }}
                         className="text-gray-400 hover:text-black"
+                        title={isFavorite(course.id) ? 'Remove from saved' : 'Save course'}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill={isFavorite(course.id) ? "black" : "none"} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -369,7 +372,7 @@ const SearchPage = () => {
                       </span>
                     )}
                   </div>
-                </a>
+                </div>
               ))}
             </div>
 

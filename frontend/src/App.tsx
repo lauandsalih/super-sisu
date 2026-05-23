@@ -7,6 +7,7 @@ import SearchPage from './pages/SearchPage'
 import CoursePage from './pages/CoursePage'
 import Profile from './pages/Profile'
 import DegreePlanner from './pages/DegreePlanner'
+import FavoritesPage from './pages/FavoritesPage'
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
             <Route path="/course/:id" element={<CoursePage />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/degree" element={<DegreePlanner />} />
+            <Route path="/favorites" element={<FavoritesPage />} />
           </Route>
         </Routes>
       </FavoritesProvider>

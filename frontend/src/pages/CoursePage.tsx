@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { useFavorites } from '../context/FavoritesContext'
 
@@ -33,6 +33,9 @@ type Review = {
 
 const CoursePage = () => {
   const { id } = useParams()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const fromState = location.state as { fromSearch?: string; fromPage?: number } | null
   const [course, setCourse] = useState<Course | null>(null)
   const [reviews, setReviews] = useState<Review[]>([])
   const [exams, setExams] = useState<any[]>([])
@@ -192,7 +195,10 @@ const CoursePage = () => {
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-4">
-          <Link to="/search" className="text-blue-600 text-sm hover:underline">← Back to Search</Link>
+          <button
+            onClick={() => navigate('/search', { state: fromState ? { fromSearch: fromState.fromSearch, fromPage: fromState.fromPage } : undefined })}
+            className="text-blue-600 text-sm hover:underline"
+          >← Back to Search</button>
           <Link to="/" className="text-blue-600 text-sm hover:underline">Home</Link>
         </div>
         
