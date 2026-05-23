@@ -125,7 +125,10 @@ app.post('/api/extract-grades', async (req, res) => {
     failed = validCourses.filter(c => !catalogMap.has(c.courseCode)).map(c => c.courseCode)
 
     if (upsertRows.length > 0) {
-      const conflictKey = degreeId ? 'user_id,course_id,status,degree_id' : 'user_id,course_id,status'
+      // Use degree-scoped conflict key if degreeId provided, otherwise fall back to original
+      const conflictKey = degreeId
+        ? 'user_id,course_id,status,degree_id'
+        : 'user_id,course_id,status'
       const { error: batchError } = await supabase
         .from('user_courses')
         .upsert(upsertRows, { onConflict: conflictKey })
