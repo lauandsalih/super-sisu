@@ -53,12 +53,20 @@ type UserCourse = {
   status: 'completed' | 'current' | 'planned'
   grade: number | null
   period: string | null
+  degree_id: string | null
   courses: {
     id: string
     code: string
     name: string
     credits: number
   }
+}
+
+type UserDegree = {
+  id: string
+  name: string
+  target_credits: number
+  graduation_date: string | null
 }
 
 const Profile = () => {
@@ -72,7 +80,6 @@ const Profile = () => {
   const [extractingGrades, setExtractingGrades] = useState(false)
   const [deleteMode, setDeleteMode] = useState(false)
   const [selectedCourses, setSelectedCourses] = useState<Set<string>>(new Set())
-  const [degreeType, setDegreeType] = useState<'bachelor' | 'master'>('bachelor')
   const [showDegreeDetails, setShowDegreeDetails] = useState(false)
   const [showAddCourseModal, setShowAddCourseModal] = useState(false)
   const [addCourseSearch, setAddCourseSearch] = useState('')
@@ -83,6 +90,11 @@ const Profile = () => {
   const [addCourseStatus, setAddCourseStatus] = useState<string>('completed')
   const [timedOut, setTimedOut] = useState(false)
   const [editingGradeId, setEditingGradeId] = useState<string | null>(null)
+  const [degrees, setDegrees] = useState<UserDegree[]>([])
+  const [activeDegreeId, setActiveDegreeId] = useState<string | null>(null)
+  const [editingDegreeName, setEditingDegreeName] = useState<string | null>(null)
+  const [degreeNameInput, setDegreeNameInput] = useState('')
+  const [showImportForDegree, setShowImportForDegree] = useState<string | null>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => setTimedOut(true), 10000)
@@ -94,19 +106,53 @@ const Profile = () => {
       const { data: { session } } = await supabase.auth.getSession()
       const user = session?.user ?? null
       setUser(user)
-      
+
       if (user) {
-        const { data } = await supabase
-          .from('user_courses')
-          .select('*, courses(*)')
-          .eq('user_id', user.id)
-        if (data) setUserCourses(data)
+        const [coursesRes, degreesRes] = await Promise.all([
+          supabase.from('user_courses').select('*, courses(*)').eq('user_id', user.id),
+          supabase.from('user_degrees').select('*').eq('user_id', user.id).order('created_at')
+        ])
+        if (coursesRes.data) setUserCourses(coursesRes.data)
+        if (degreesRes.data && degreesRes.data.length > 0) {
+          setDegrees(degreesRes.data)
+          setActiveDegreeId(degreesRes.data[0].id)
+        }
       }
-      
+
       setLoading(false)
     }
     getUser()
   }, [])
+
+  const createDegree = async () => {
+    if (!user) return
+    const name = `Degree ${degrees.length + 1}`
+    const { data, error } = await supabase
+      .from('user_degrees')
+      .insert({ user_id: user.id, name, target_credits: 180 })
+      .select()
+      .single()
+    if (!error && data) {
+      setDegrees(prev => [...prev, data])
+      setActiveDegreeId(data.id)
+    }
+  }
+
+  const renameDegree = async (id: string, name: string) => {
+    await supabase.from('user_degrees').update({ name }).eq('id', id)
+    setDegrees(prev => prev.map(d => d.id === id ? { ...d, name } : d))
+    setEditingDegreeName(null)
+  }
+
+  const deleteDegree = async (id: string) => {
+    if (!confirm('Delete this degree and all its courses?')) return
+    await supabase.from('user_courses').delete().eq('degree_id', id)
+    await supabase.from('user_degrees').delete().eq('id', id)
+    const remaining = degrees.filter(d => d.id !== id)
+    setDegrees(remaining)
+    setUserCourses(prev => prev.filter(uc => uc.degree_id !== id))
+    setActiveDegreeId(remaining[0]?.id ?? null)
+  }
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -114,22 +160,29 @@ const Profile = () => {
     setUserCourses([])
   }
 
+  // Courses scoped to the active degree
+  const degreeCourses = activeDegreeId
+    ? userCourses.filter(uc => uc.degree_id === activeDegreeId)
+    : userCourses
+
+  const activeDegree = degrees.find(d => d.id === activeDegreeId) ?? null
+
   const getPeriods = () => {
     const periods = new Set<string>()
-    userCourses.forEach(uc => {
+    degreeCourses.forEach(uc => {
       if (uc.period) periods.add(uc.period)
     })
     return Array.from(periods).sort()
   }
 
-  const filteredCourses = userCourses.filter(uc => {
+  const filteredCourses = degreeCourses.filter(uc => {
     if (selectedStatus !== 'all' && uc.status !== selectedStatus) return false
     if (selectedPeriod && uc.period !== selectedPeriod) return false
     return true
   })
 
-  const gradedCourses = userCourses.filter(uc => uc.grade !== null)
-  const totalCredits = userCourses
+  const gradedCourses = degreeCourses.filter(uc => uc.grade !== null)
+  const totalCredits = degreeCourses
     .filter(uc => uc.status === 'completed')
     .reduce((sum, uc) => sum + (uc.courses?.credits || 0), 0)
 
@@ -310,7 +363,61 @@ const Profile = () => {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-4 py-12">
         <a href="/" className="text-blue-600 text-sm mb-6 block">Back to home</a>
-        
+
+        {/* Degree selector */}
+        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-sm font-semibold text-gray-500">Degree:</span>
+            {degrees.map(d => (
+              <div key={d.id} className="flex items-center gap-1">
+                {editingDegreeName === d.id ? (
+                  <form onSubmit={e => { e.preventDefault(); renameDegree(d.id, degreeNameInput) }} className="flex items-center gap-1">
+                    <input
+                      autoFocus
+                      value={degreeNameInput}
+                      onChange={e => setDegreeNameInput(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm w-32"
+                    />
+                    <button type="submit" className="text-xs text-blue-600 hover:underline">Save</button>
+                    <button type="button" onClick={() => setEditingDegreeName(null)} className="text-xs text-gray-400 hover:underline">Cancel</button>
+                  </form>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setActiveDegreeId(d.id)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                        activeDegreeId === d.id
+                          ? 'bg-[#0065BD] text-white border-[#0065BD]'
+                          : 'bg-white text-gray-700 border-gray-200 hover:border-[#0065BD]'
+                      }`}
+                    >
+                      {d.name}
+                    </button>
+                    <button
+                      onClick={() => { setEditingDegreeName(d.id); setDegreeNameInput(d.name) }}
+                      className="text-gray-300 hover:text-gray-500 text-xs"
+                      title="Rename"
+                    >✎</button>
+                    {degrees.length > 1 && (
+                      <button
+                        onClick={() => deleteDegree(d.id)}
+                        className="text-gray-300 hover:text-red-500 text-xs"
+                        title="Delete degree"
+                      >×</button>
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
+            <button
+              onClick={createDegree}
+              className="px-3 py-1.5 rounded-lg text-sm border border-dashed border-gray-300 text-gray-500 hover:border-[#0065BD] hover:text-[#0065BD] transition-all"
+            >
+              + Add degree
+            </button>
+          </div>
+        </div>
+
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
           <div className="flex justify-between items-start mb-4">
             <div>
@@ -352,11 +459,11 @@ const Profile = () => {
               <div className="text-sm text-gray-500">GPA</div>
             </div>
             <div className="text-center p-4 bg-gray-50 rounded-lg">
-              <div className="text-2xl font-bold text-purple-600">{userCourses.filter(uc => uc.status === 'completed').length}</div>
+              <div className="text-2xl font-bold text-purple-600">{degreeCourses.filter(uc => uc.status === 'completed').length}</div>
               <div className="text-sm text-gray-500">Courses Done</div>
             </div>
             <div className="text-center p-4 bg-gray-50 rounded-lg">
-              <div className="text-2xl font-bold text-orange-600">{userCourses.filter(uc => uc.status === 'planned').length}</div>
+              <div className="text-2xl font-bold text-orange-600">{degreeCourses.filter(uc => uc.status === 'planned').length}</div>
               <div className="text-sm text-gray-500">Planned</div>
             </div>
           </div>
@@ -364,24 +471,34 @@ const Profile = () => {
 
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Degree Progress</h2>
-            <select
-              value={degreeType}
-              onChange={(e) => setDegreeType(e.target.value as 'bachelor' | 'master')}
-              className="text-sm border rounded px-3 py-1"
-            >
-              <option value="bachelor">Bachelor's</option>
-              <option value="master">Master's</option>
-            </select>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Degree Progress {activeDegree && <span className="text-gray-400 font-normal text-base">— {activeDegree.name}</span>}
+            </h2>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Target:</span>
+              <input
+                type="number"
+                min={1}
+                value={activeDegree?.target_credits ?? 180}
+                onChange={async e => {
+                  const val = parseInt(e.target.value)
+                  if (!activeDegree || isNaN(val)) return
+                  await supabase.from('user_degrees').update({ target_credits: val }).eq('id', activeDegree.id)
+                  setDegrees(prev => prev.map(d => d.id === activeDegree.id ? { ...d, target_credits: val } : d))
+                }}
+                className="w-20 text-sm border rounded px-2 py-1"
+              />
+              <span className="text-xs text-gray-500">cr</span>
+            </div>
           </div>
-          
+
           {(() => {
-            const targetCredits = degreeType === 'bachelor' ? 180 : 120
-            const completedCredits = userCourses
+            const targetCredits = activeDegree?.target_credits ?? 180
+            const completedCredits = degreeCourses
               .filter(uc => uc.status === 'completed')
               .reduce((sum, uc) => sum + (uc.courses?.credits || 0), 0)
             const percentage = Math.min((completedCredits / targetCredits) * 100, 100)
-            
+
             return (
               <div>
                 <div className="flex justify-between text-sm mb-2">
@@ -389,19 +506,19 @@ const Profile = () => {
                   <span className="text-gray-500">{percentage.toFixed(0)}%</span>
                 </div>
                 <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-                  <div 
+                  <div
                     className="h-full bg-blue-600 rounded-full transition-all duration-300"
                     style={{ width: `${percentage}%` }}
                   />
                 </div>
-                
+
                 <button
                   onClick={() => setShowDegreeDetails(!showDegreeDetails)}
                   className="mt-4 text-sm text-blue-600 hover:underline flex items-center gap-1"
                 >
                   {showDegreeDetails ? '▼' : '▶'} View breakdown
                 </button>
-                
+
                 {showDegreeDetails && (
                   <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-2 text-sm">
                     <div className="flex justify-between">
@@ -411,13 +528,13 @@ const Profile = () => {
                     <div className="flex justify-between">
                       <span>In Progress</span>
                       <span className="font-medium">
-                        {userCourses.filter(uc => uc.status === 'current').reduce((s, uc) => s + (uc.courses?.credits || 0), 0)} cr
+                        {degreeCourses.filter(uc => uc.status === 'current').reduce((s, uc) => s + (uc.courses?.credits || 0), 0)} cr
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Planned</span>
                       <span className="font-medium">
-                        {userCourses.filter(uc => uc.status === 'planned').reduce((s, uc) => s + (uc.courses?.credits || 0), 0)} cr
+                        {degreeCourses.filter(uc => uc.status === 'planned').reduce((s, uc) => s + (uc.courses?.credits || 0), 0)} cr
                       </span>
                     </div>
                     <div className="border-t pt-2 flex justify-between font-semibold">
@@ -494,15 +611,30 @@ onChange={async (e) => {
                   setTranscriptMessage('PDF uploaded! Extracting grades...')
                   setExtractingGrades(true)
 
+                  // Ensure the active degree exists before importing
+                  let targetDegreeId = activeDegreeId
+                  if (!targetDegreeId) {
+                    const { data: newDegree } = await supabase
+                      .from('user_degrees')
+                      .insert({ user_id: user.id, name: 'Degree 1', target_credits: 180 })
+                      .select().single()
+                    if (newDegree) {
+                      setDegrees([newDegree])
+                      setActiveDegreeId(newDegree.id)
+                      targetDegreeId = newDegree.id
+                    }
+                  }
+
                   const response = await fetch(apiPath('/api/extract-grades'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                       pdfUrl: publicUrl,
-                      userId: user.id 
+                      userId: user.id,
+                      degreeId: targetDegreeId
                     })
                   })
-                  
+
                   if (response.ok) {
                     const data = await response.json()
                     const withGrades = data.gradesExtracted?.filter((g: any) => g.grade !== null).map((g: any) => `${g.code}:${g.grade}`).join(', ') || 'none'
@@ -510,30 +642,12 @@ onChange={async (e) => {
                     const missingPeriod = data.gradesExtracted.filter((g: any) => !g.date).map((g: any) => g.code).join(', ')
                     const msg = missingPeriod ? `Imported ${data.imported}/${data.total} courses (${totalCredits} cr). Missing period: ${missingPeriod}` : `Imported ${data.imported}/${data.total} courses (${totalCredits} credits). Grades found: ${withGrades}`
                     setTranscriptMessage(msg)
-                    
-                    // Save imported courses to localStorage in dev mode, or fetch from Supabase in prod
-                    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                      // Save response data to dev courses
-                      if (data.gradesExtracted) {
-                        const fakeUserCourses = data.gradesExtracted.map((g: any, i: number) => ({
-                          id: `imported-${i}`,
-                          user_id: user.id,
-                          course_id: g.code,
-                          status: 'completed',
-                          grade: g.grade,
-                          period: convertDateToPeriod(g.date),
-                          courses: { id: g.code, code: g.code, name: g.code, credits: g.credits }
-                        }))
-                        setUserCourses(fakeUserCourses)
-                        localStorage.setItem('devUserCourses', JSON.stringify(fakeUserCourses))
-                      }
-                    } else {
-                      const { data: updatedCourses } = await supabase
-                        .from('user_courses')
-                        .select('*, courses(*)')
-                        .eq('user_id', user.id)
-                      if (updatedCourses) setUserCourses(updatedCourses)
-                    }
+
+                    const { data: updatedCourses } = await supabase
+                      .from('user_courses')
+                      .select('*, courses(*)')
+                      .eq('user_id', user.id)
+                    if (updatedCourses) setUserCourses(updatedCourses)
                   } else {
                     setTranscriptMessage('Error extracting grades. Please try again.')
                   }
@@ -645,14 +759,15 @@ onChange={async (e) => {
                     <>
                       <button
                         onClick={async () => {
-                          if (!user) return
+                          if (!user || !activeDegreeId) return
                           const { error } = await supabase
                             .from('user_courses')
                             .delete()
                             .eq('user_id', user.id)
+                            .eq('degree_id', activeDegreeId)
                             .eq('status', 'completed')
                           if (!error) {
-                            setUserCourses(prev => prev.filter(uc => uc.status !== 'completed'))
+                            setUserCourses(prev => prev.filter(uc => !(uc.degree_id === activeDegreeId && uc.status === 'completed')))
                             setDeleteMode(false)
                             setSelectedCourses(new Set())
                           }
@@ -663,14 +778,15 @@ onChange={async (e) => {
                       </button>
                       <button
                         onClick={async () => {
-                          if (!user) return
+                          if (!user || !activeDegreeId) return
                           const { error } = await supabase
                             .from('user_courses')
                             .delete()
                             .eq('user_id', user.id)
+                            .eq('degree_id', activeDegreeId)
                             .eq('status', 'planned')
                           if (!error) {
-                            setUserCourses(prev => prev.filter(uc => uc.status !== 'planned'))
+                            setUserCourses(prev => prev.filter(uc => !(uc.degree_id === activeDegreeId && uc.status === 'planned')))
                             setDeleteMode(false)
                             setSelectedCourses(new Set())
                           }
@@ -681,13 +797,14 @@ onChange={async (e) => {
                       </button>
                       <button
                         onClick={async () => {
-                          if (!user) return
+                          if (!user || !activeDegreeId) return
                           const { error } = await supabase
                             .from('user_courses')
                             .delete()
                             .eq('user_id', user.id)
+                            .eq('degree_id', activeDegreeId)
                           if (!error) {
-                            setUserCourses([])
+                            setUserCourses(prev => prev.filter(uc => uc.degree_id !== activeDegreeId))
                             setDeleteMode(false)
                             setSelectedCourses(new Set())
                           }
@@ -905,7 +1022,8 @@ onChange={async (e) => {
                     course_id: addCourseSelected.id,
                     status: addCourseStatus,
                     period: addCoursePeriod || null,
-                    grade: addCourseGrade ? parseInt(addCourseGrade) : null
+                    grade: addCourseGrade ? parseInt(addCourseGrade) : null,
+                    degree_id: activeDegreeId
                   })
                   if (!error) {
                     setShowAddCourseModal(false)

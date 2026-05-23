@@ -47,14 +47,24 @@ type ChartDataPoint = {
   isCurrentOrFuture: boolean
 }
 
+type UserDegree = {
+  id: string
+  name: string
+  target_credits: number
+  graduation_date: string | null
+}
+
 const DegreePlanner = () => {
   const [loading, setLoading] = useState(true)
+  const [allCourses, setAllCourses] = useState<UserCourse[]>([])
   const [completedCourses, setCompletedCourses] = useState<UserCourse[]>([])
   const [plannedCourses, setPlannedCourses] = useState<UserCourse[]>([])
   const [currentCourses, setCurrentCourses] = useState<UserCourse[]>([])
   const [targetCredits, setTargetCredits] = useState(180)
   const [targetGPA, setTargetGPA] = useState(4.0)
   const [goalDate, setGoalDate] = useState('')
+  const [degrees, setDegrees] = useState<UserDegree[]>([])
+  const [activeDegreeId, setActiveDegreeId] = useState<string | null>(null)
   const [addCourseModal, setAddCourseModal] = useState(false)
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([])
   const [addModalPeriod, setAddModalPeriod] = useState<string>('')
@@ -107,14 +117,20 @@ const DegreePlanner = () => {
     return all.slice(start, end).map(p => p.str)
   })()
 
+  const applyDegreeFilter = (courses: UserCourse[], degreeId: string | null) => {
+    const filtered = degreeId ? courses.filter(uc => (uc as any).degree_id === degreeId) : courses
+    setAllCourses(courses)
+    setCompletedCourses(filtered.filter(uc => uc.status === 'completed'))
+    setCurrentCourses(filtered.filter(uc => uc.status === 'current'))
+    setPlannedCourses(filtered.filter(uc => uc.status === 'planned'))
+  }
+
   useEffect(() => {
     const fetchData = async () => {
-      
-      
       const { data: { user } } = await supabase.auth.getUser()
 
       if (user) {
-        const [coursesData, userData] = await Promise.all([
+        const [coursesData, userData, degreesData] = await Promise.all([
           supabase
             .from('user_courses')
             .select('*, courses(*)')
@@ -124,22 +140,28 @@ const DegreePlanner = () => {
             .from('users')
             .select('graduation_date')
             .eq('id', user.id)
-            .maybeSingle()
+            .maybeSingle(),
+          supabase
+            .from('user_degrees')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at')
         ])
 
-        if (coursesData.data) {
-          const completed = coursesData.data.filter((uc: any) => uc.status === 'completed')
-          const current = coursesData.data.filter((uc: any) => uc.status === 'current')
-          const planned = coursesData.data.filter((uc: any) => uc.status === 'planned')
-          setCompletedCourses(completed)
-          setCurrentCourses(current)
-          setPlannedCourses(planned)
+        if (degreesData.data && degreesData.data.length > 0) {
+          setDegrees(degreesData.data)
+          const firstId = degreesData.data[0].id
+          setActiveDegreeId(firstId)
+          if (coursesData.data) applyDegreeFilter(coursesData.data, firstId)
+          // Use first degree's target_credits and graduation_date
+          setTargetCredits(degreesData.data[0].target_credits || 180)
+          if (degreesData.data[0].graduation_date) setGoalDate(degreesData.data[0].graduation_date)
+        } else if (coursesData.data) {
+          applyDegreeFilter(coursesData.data, null)
         }
-        
-        if (userData.data?.graduation_date) {
+
+        if (!degreesData.data?.length && userData.data?.graduation_date) {
           setGoalDate(userData.data.graduation_date)
-        } else if (userData.data) {
-          setGoalDate(userData.data.graduation_date || '')
         }
       } else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         const savedDevCourses = localStorage.getItem('devUserCourses')
@@ -719,6 +741,36 @@ const DegreePlanner = () => {
           <h1 className="text-2xl font-bold text-gray-900">My Degree Plan</h1>
           <p className="text-gray-500 text-sm">Track your progress toward graduation</p>
         </div>
+
+        {/* Degree selector */}
+        {degrees.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-sm font-semibold text-gray-500">Degree:</span>
+              {degrees.map(d => (
+                <button
+                  key={d.id}
+                  onClick={() => {
+                    setActiveDegreeId(d.id)
+                    applyDegreeFilter(allCourses, d.id)
+                    setTargetCredits(d.target_credits || 180)
+                    if (d.graduation_date) setGoalDate(d.graduation_date)
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                    activeDegreeId === d.id
+                      ? 'bg-[#0065BD] text-white border-[#0065BD]'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-[#0065BD]'
+                  }`}
+                >
+                  {d.name}
+                </button>
+              ))}
+              <a href="/profile" className="text-xs text-gray-400 hover:text-gray-600 hover:underline ml-auto">
+                Manage degrees →
+              </a>
+            </div>
+          </div>
+        )}
 
         {/* Radial Progress */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
@@ -1564,7 +1616,8 @@ const DegreePlanner = () => {
                               course_id: course.id,
                               status: 'planned',
                               period,
-                              grade: null
+                              grade: null,
+                              degree_id: activeDegreeId
                             })
                           }
                         }))

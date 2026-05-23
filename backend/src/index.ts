@@ -25,8 +25,8 @@ app.get('/', async (req, res) => {
 
 app.post('/api/extract-grades', async (req, res) => {
   try {
-    const { pdfUrl, userId, pdfBase64, fileName } = req.body
-    console.log('Extract grades request:', { pdfUrl, userId, hasBase64: !!pdfBase64 })
+    const { pdfUrl, userId, pdfBase64, fileName, degreeId } = req.body
+    console.log('Extract grades request:', { pdfUrl, userId, degreeId, hasBase64: !!pdfBase64 })
     
     let pdfBuffer: Buffer
     
@@ -118,15 +118,17 @@ app.post('/api/extract-grades', async (req, res) => {
         course_id: catalogMap.get(c.courseCode)!,
         status: 'completed',
         grade: c.grade,
-        period: mapDateToPeriod(c.completionDate || null)
+        period: mapDateToPeriod(c.completionDate || null),
+        ...(degreeId ? { degree_id: degreeId } : {})
       }))
 
     failed = validCourses.filter(c => !catalogMap.has(c.courseCode)).map(c => c.courseCode)
 
     if (upsertRows.length > 0) {
+      const conflictKey = degreeId ? 'user_id,course_id,status,degree_id' : 'user_id,course_id,status'
       const { error: batchError } = await supabase
         .from('user_courses')
-        .upsert(upsertRows, { onConflict: 'user_id,course_id,status' })
+        .upsert(upsertRows, { onConflict: conflictKey })
       if (batchError) {
         console.error('Batch upsert error:', batchError)
       } else {
