@@ -90,6 +90,8 @@ const Profile = () => {
   const [addCourseStatus, setAddCourseStatus] = useState<string>('completed')
   const [timedOut, setTimedOut] = useState(false)
   const [editingGradeId, setEditingGradeId] = useState<string | null>(null)
+  const [completingId, setCompletingId] = useState<string | null>(null)
+  const [completingGrade, setCompletingGrade] = useState<string>('')
   const [degrees, setDegrees] = useState<UserDegree[]>([])
   const [activeDegreeId, setActiveDegreeId] = useState<string | null>(null)
   const [editingDegreeName, setEditingDegreeName] = useState<string | null>(null)
@@ -930,6 +932,65 @@ onChange={async (e) => {
                             {uc.grade !== null ? uc.grade : '—'}
                           </span>
                         </>
+                      )}
+                    </div>
+                  )}
+                  {uc.status === 'planned' && !deleteMode && (
+                    <div className="flex flex-col items-center gap-1 shrink-0">
+                      {completingId === uc.id ? (
+                        <div className="flex flex-col items-end gap-1">
+                          <select
+                            autoFocus
+                            value={completingGrade}
+                            onChange={e => setCompletingGrade(e.target.value)}
+                            className="border rounded px-2 py-1 text-sm"
+                          >
+                            <option value="">No grade</option>
+                            <option value="5">5</option>
+                            <option value="4">4</option>
+                            <option value="3">3</option>
+                            <option value="2">2</option>
+                            <option value="1">1</option>
+                          </select>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={async () => {
+                                const { error } = await supabase
+                                  .from('user_courses')
+                                  .update({
+                                    status: 'completed',
+                                    grade: completingGrade ? parseInt(completingGrade) : null
+                                  })
+                                  .eq('id', uc.id)
+                                if (!error) {
+                                  setUserCourses(prev => prev.map(c =>
+                                    c.id === uc.id
+                                      ? { ...c, status: 'completed', grade: completingGrade ? parseInt(completingGrade) : null }
+                                      : c
+                                  ))
+                                }
+                                setCompletingId(null)
+                                setCompletingGrade('')
+                              }}
+                              className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => { setCompletingId(null); setCompletingGrade('') }}
+                              className="text-xs px-2 py-1 border rounded text-gray-500 hover:bg-gray-50"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setCompletingId(uc.id); setCompletingGrade('') }}
+                          className="text-xs px-2 py-1 border border-green-300 text-green-700 rounded hover:bg-green-50"
+                        >
+                          Mark complete
+                        </button>
                       )}
                     </div>
                   )}
