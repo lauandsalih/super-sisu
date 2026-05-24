@@ -1328,15 +1328,13 @@ const DegreePlanner = () => {
                       const dataPoint = gpaData[idx]
                       const periodLabel = dataPoint.periodLabel
                       const displayYear = dataPoint.year
-                      const firstIIdx = gpaData.findIndex(d => d.periodLabel === 'I')
-                      const isFirstI = periodLabel === 'I' && idx === firstIIdx
-                      const showYear = idx === 0 || isFirstI
+                      const isPeriodI = periodLabel === 'I'
                       return (
                         <g transform={`translate(${x},${y})`}>
                           <text x={0} y={0} dy={0} textAnchor="middle" fill="#374151" fontSize={11}>
                             {periodLabel}
                           </text>
-                          {showYear && (
+                          {isPeriodI && (
                             <text x={0} y={14} dy={0} textAnchor="middle" fill="#9ca3af" fontSize={9}>
                               {`${displayYear}-${displayYear + 1}`}
                             </text>
