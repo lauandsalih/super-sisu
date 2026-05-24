@@ -83,6 +83,7 @@ const DegreePlanner = () => {
   const [editingGradDateModal, setEditingGradDateModal] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [sharing, setSharing] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
 
   useEffect(() => {
     localStorage.setItem('gradeAdjustments', JSON.stringify(gradeAdjustments))
@@ -160,6 +161,22 @@ const DegreePlanner = () => {
           if (coursesData.data) applyDegreeFilter(coursesData.data, firstId)
           setTargetCredits(degreesData.data[0].target_credits || 180)
           if (degreesData.data[0].graduation_date) setGoalDate(degreesData.data[0].graduation_date)
+        } else if (!degreesRes.error) {
+          // Table exists but user has no degrees — auto-create Degree 1 and show onboarding
+          const { data: newDegree } = await supabase
+            .from('user_degrees')
+            .insert({ user_id: user.id, name: 'Degree 1', target_credits: 180 })
+            .select()
+            .single()
+          if (newDegree) {
+            setDegrees([newDegree])
+            setActiveDegreeId(newDegree.id)
+          }
+          if (coursesData.data) applyDegreeFilter(coursesData.data, newDegree?.id ?? null)
+          // Show onboarding only if they have no courses yet
+          const hasNoCourses = !coursesData.data || coursesData.data.length === 0
+          const seenOnboarding = localStorage.getItem('onboardingSeen')
+          if (hasNoCourses && !seenOnboarding) setShowOnboarding(true)
         } else if (coursesData.data) {
           applyDegreeFilter(coursesData.data, null)
         }
@@ -1949,6 +1966,56 @@ const DegreePlanner = () => {
           </div>
         )}
       </div>
+
+      {/* Onboarding modal */}
+      {showOnboarding && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+            <div className="bg-[#0065BD] px-8 py-6 text-white">
+              <div className="text-3xl font-bold mb-1">Welcome to supersisu 👋</div>
+              <p className="text-blue-100 text-sm">Your Aalto degree planner. Here's how to get started in 3 steps.</p>
+            </div>
+            <div className="px-8 py-6 space-y-5">
+              <div className="flex gap-4 items-start">
+                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold text-sm flex items-center justify-center shrink-0">1</div>
+                <div>
+                  <p className="font-semibold text-gray-900">Import your transcript</p>
+                  <p className="text-sm text-gray-500">Upload your Aalto transcript PDF to instantly import all your completed courses and grades.</p>
+                </div>
+              </div>
+              <div className="flex gap-4 items-start">
+                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold text-sm flex items-center justify-center shrink-0">2</div>
+                <div>
+                  <p className="font-semibold text-gray-900">Plan your remaining courses</p>
+                  <p className="text-sm text-gray-500">Add courses you plan to take and assign them to future periods to see your graduation timeline.</p>
+                </div>
+              </div>
+              <div className="flex gap-4 items-start">
+                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold text-sm flex items-center justify-center shrink-0">3</div>
+                <div>
+                  <p className="font-semibold text-gray-900">Track your GPA and credits</p>
+                  <p className="text-sm text-gray-500">See your GPA over time, simulate what-if grades, and track how close you are to graduating.</p>
+                </div>
+              </div>
+            </div>
+            <div className="px-8 pb-8 flex gap-3">
+              <a
+                href="/profile"
+                onClick={() => { localStorage.setItem('onboardingSeen', '1'); setShowOnboarding(false) }}
+                className="flex-1 text-center px-4 py-3 bg-[#0065BD] text-white rounded-xl font-semibold hover:bg-[#0055a3] transition"
+              >
+                Import transcript →
+              </a>
+              <button
+                onClick={() => { localStorage.setItem('onboardingSeen', '1'); setShowOnboarding(false) }}
+                className="flex-1 px-4 py-3 border rounded-xl text-gray-600 hover:bg-gray-50 transition text-sm"
+              >
+                I'll add courses manually
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
