@@ -47,6 +47,7 @@ app.post('/api/extract-grades', async (req, res) => {
     
     const pdfData = await pdfParse(pdfBuffer)
     const pdfText = pdfData.text
+    console.log('RAW TEXT:\n' + pdfText.substring(0, 5000))
 
     const courses = extractCoursesFromText(pdfText)
     console.log('Extracted courses:', courses.length, JSON.stringify(courses))
